@@ -1,0 +1,13 @@
+Review the project security.
+
+Check:
+
+Secrets
+
+File operations
+
+Injection
+
+Unsafe code
+
+Weak validation

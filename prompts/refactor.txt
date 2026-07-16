@@ -1,0 +1,13 @@
+Refactor this code.
+
+Goals:
+
+Cleaner architecture
+
+Better names
+
+Smaller functions
+
+Better readability
+
+Keep exactly the same behaviour.

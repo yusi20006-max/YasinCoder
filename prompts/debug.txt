@@ -1,0 +1,13 @@
+Debug this project.
+
+Focus on:
+
+Syntax
+
+Imports
+
+Runtime errors
+
+Logic bugs
+
+Return fixes only.

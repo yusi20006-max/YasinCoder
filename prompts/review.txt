@@ -1,0 +1,15 @@
+Review this source code.
+
+Find:
+
+- Bugs
+
+- Performance issues
+
+- Security problems
+
+- Bad practices
+
+- Refactoring opportunities
+
+Return a structured report.

@@ -1,0 +1,9 @@
+Analyze project architecture.
+
+Explain modules.
+
+Explain dependencies.
+
+Suggest improvements.
+
+Keep compatibility.
