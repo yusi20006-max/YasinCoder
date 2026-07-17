@@ -3,7 +3,7 @@ import sys
 from router import Router
 
 from core.banner import show
-
+from commands.git import GitCommand
 from commands.help import HelpCommand
 from commands.info import InfoCommand
 from commands.models import ModelsCommand
@@ -17,102 +17,88 @@ from commands.fix import FixCommand
 from commands.refactor import RefactorCommand
 from commands.explain import ExplainCommand
 
+from commands.index import IndexCommand
+from commands.stats import StatsCommand
+
+
 def main():
 
     show()
 
-    if len(sys.argv)==1:
+    if len(sys.argv) < 2:
 
-        print(HelpCommand().run())
+        HelpCommand().run()
 
         return
 
-    cmd=sys.argv[1]
+    command = sys.argv[1]
 
-    if cmd=="help":
+    args = sys.argv[2:]
 
-        print(HelpCommand().run())
+    if command == "help":
 
-    elif cmd=="info":
+        HelpCommand().run()
 
-        print(InfoCommand().run())
+    elif command == "info":
 
-    elif cmd=="models":
+        InfoCommand().run()
 
-        print(ModelsCommand().run())
+    elif command == "models":
 
-    elif cmd=="project":
+        ModelsCommand().run()
 
-        print(ProjectCommand().run())
+    elif command == "git":
 
-    elif cmd=="brain":
+        GitCommand().run(args)
 
-        brain=BrainCommand().run()
+    elif command == "project":
 
-        print("FILES:",len(brain))
+        ProjectCommand().run()
 
-        for item in brain:
+    elif command == "brain":
 
-            print(item["file"])
+        BrainCommand().run()
 
-    elif cmd=="search":
+    elif command == "search":
 
-        if len(sys.argv)<3:
+        SearchCommand().run(args)
 
-            print("Usage: search keyword")
+    elif command == "read":
 
-            return
+        ReadCommand().run(args)
 
-        result=SearchCommand().run(sys.argv[2])
+    elif command == "chat":
 
-        for file in result:
+        ChatCommand().run(args)
 
-            print(file)
+    elif command == "explain":
 
-    elif cmd=="read":
+        ExplainCommand().run(args)
 
-        if len(sys.argv)<3:
+    elif command == "fix":
 
-            print("Usage: read filename.py")
+        FixCommand().run(args)
 
-            return
+    elif command == "refactor":
 
-        print(ReadCommand().run(sys.argv[2]))
+        RefactorCommand().run(args)
+    elif command == "review":
 
-    elif cmd=="chat":
+        ReviewCommand().run(args)
 
-        prompt=" ".join(sys.argv[2:])
+    elif command == "index":
 
-        print(ChatCommand().run(prompt))
+        IndexCommand().run()
 
-    elif cmd=="review":
+    elif command == "stats":
 
-        print(ReviewCommand().run(sys.argv[2]))
-
-    elif cmd=="fix":
-
-        print(FixCommand().run(sys.argv[2]))
-
-    elif cmd=="refactor":
-
-        print(RefactorCommand().run(sys.argv[2]))
-
-    elif cmd=="explain":
-
-        filename=sys.argv[2]
-
-        question="Explain this file."
-
-        if len(sys.argv)>3:
-
-            question=" ".join(sys.argv[3:])
-
-        print(ExplainCommand().run(filename,question))
+        StatsCommand().run()
 
     else:
 
         print("Unknown command.")
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
 
     main()

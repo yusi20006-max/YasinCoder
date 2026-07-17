@@ -1,42 +1,118 @@
-import os
+import ast
+import json
+from pathlib import Path
+
 
 class ProjectIndex:
 
-    def __init__(self):
-        self.files=[]
+    def __init__(self, root):
 
-    def scan(self,project):
+        self.root = Path(root)
+        self.db = self.root / ".yc"
 
-        self.files=[]
+    def save(self, name, data):
 
-        for root,dirs,files in os.walk(project):
+        self.db.mkdir(exist_ok=True)
 
-            dirs[:]=[d for d in dirs if not d.startswith(".")]
+        with open(self.db / name, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
 
-            for file in files:
+    def load(self, name):
 
-                if file.endswith(".py"):
+        path = self.db / name
 
-                    self.files.append({
+        if not path.exists():
+            return {}
 
-                        "name":file,
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
 
-                        "path":os.path.join(root,file)
+    def python_files(self):
 
-                    })
+        files = []
 
-        return self.files
+        for file in self.root.rglob("*.py"):
 
-    def names(self):
+            if ".git" in file.parts:
+                continue
 
-        return [x["name"] for x in self.files]
+            if "__pycache__" in file.parts:
+                continue
 
-    def find(self,name):
+            if ".yc" in file.parts:
+                continue
 
-        for item in self.files:
+            files.append(file)
 
-            if item["name"]==name:
+        return sorted(files)
 
-                return item
+    def analyze(self, file):
 
-        return None
+        source = file.read_text(
+            encoding="utf-8",
+            errors="ignore"
+        )
+
+        tree = ast.parse(source)
+
+        classes = []
+
+        functions = []
+
+        imports = []
+
+        for node in ast.walk(tree):
+
+            if isinstance(node, ast.ClassDef):
+
+                classes.append(node.name)
+
+            elif isinstance(node, ast.FunctionDef):
+
+                functions.append(node.name)
+
+            elif isinstance(node, ast.Import):
+
+                for n in node.names:
+
+                    imports.append(n.name)
+
+            elif isinstance(node, ast.ImportFrom):
+
+                imports.append(node.module)
+
+        return {
+
+            "file": str(file),
+
+            "classes": classes,
+
+            "functions": functions,
+
+            "imports": imports,
+
+            "lines": len(source.splitlines())
+
+        }
+
+    def build(self):
+
+        result = []
+
+        for file in self.python_files():
+
+            try:
+
+                result.append(
+
+                    self.analyze(file)
+
+                )
+
+            except Exception:
+
+                pass
+
+        self.save("index.json", result)
+
+        return result

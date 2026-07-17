@@ -1,37 +1,37 @@
 class Router:
 
-    def parse(self,args):
+    def parse(self, cmd):
 
-        if len(args)<2:
+        routes = {
 
-            return None
+            "help":"help",
 
-        cmd=args[1]
+            "info":"info",
 
-        if cmd=="explain":
+            "models":"models",
 
-            if len(args)<3:
+            "project":"project",
 
-                return None
+            "brain":"brain",
 
-            question="Explain this file."
+            "search":"search",
 
-            if len(args)>3:
+            "read":"read",
 
-                question=" ".join(args[3:])
+            "chat":"chat",
 
-            return {
+            "review":"review",
 
-                "command":"explain",
+            "fix":"fix",
 
-                "target":args[2],
+            "refactor":"refactor",
 
-                "question":question
+            "explain":"explain",
 
-            }
+            "index":"index",
 
-        return {
-
-            "command":cmd
+            "stats":"stats"
 
         }
+
+        return routes.get(cmd)

@@ -1,6 +1,6 @@
 import json
 import urllib.request
-from config import CF_ACCOUNT_ID,CF_API_TOKEN,CF_MODEL
+from config import CF_ACCOUNT_ID,CF_TOKEN,CF_MODEL
 
 class CloudflareProvider:
 
@@ -32,7 +32,7 @@ class CloudflareProvider:
 
             headers={
 
-                "Authorization":"Bearer "+CF_API_TOKEN,
+                "Authorization":"Bearer "+CF_TOKEN,
 
                 "Content-Type":"application/json"
 

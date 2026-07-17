@@ -1,30 +1,46 @@
-from project import list_files
+from core.project_index import ProjectIndex
+
 
 class ProjectStats:
 
-    def build(self):
+    def __init__(self, root):
 
-        total_files=0
-        total_lines=0
+        self.index = ProjectIndex(root)
 
-        for file in list_files():
+    def info(self):
 
-            total_files+=1
+        data = self.index.load("index.json")
 
-            try:
+        files = len(data)
 
-                with open(file,"r",encoding="utf8") as f:
+        classes = 0
 
-                    total_lines+=len(f.readlines())
+        functions = 0
 
-            except:
+        imports = 0
 
-                pass
+        lines = 0
+
+        for item in data:
+
+            classes += len(item["classes"])
+
+            functions += len(item["functions"])
+
+            imports += len(item["imports"])
+
+            lines += item["lines"]
 
         return {
 
-            "files":total_files,
+            "files": files,
 
-            "lines":total_lines
+            "classes": classes,
+
+            "functions": functions,
+
+            "imports": imports,
+
+            "lines": lines
 
         }

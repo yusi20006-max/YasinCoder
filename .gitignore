@@ -6,3 +6,17 @@ logs/
 cache/
 backups/
 config.json
+# Secrets
+cf_token.txt
+cf_account.txt
+google_api_key.txt
+
+# Cache
+.yc/
+
+# Backup
+*.bak
+
+# Python
+__pycache__/
+*.pyc
