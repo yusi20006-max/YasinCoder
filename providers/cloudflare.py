@@ -6,6 +6,10 @@ class CloudflareProvider:
 
     def chat(self,prompt):
 
+        if not CF_ACCOUNT_ID or not CF_API_TOKEN:
+
+            return "Cloudflare not configured: set CF_ACCOUNT_ID and CF_API_TOKEN in config.py"
+
         url=f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}"
 
         data=json.dumps({
