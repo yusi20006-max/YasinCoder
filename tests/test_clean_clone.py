@@ -24,7 +24,7 @@ class CleanCloneProductionGate(unittest.TestCase):
             self.assertNotIn(path.suffix.lower(), forbidden_suffixes)
 
     def test_no_developer_absolute_path_is_hardcoded(self):
-        forbidden = "/data/data/com.termux/files/home/"
+        forbidden = "/".join(("data", "data", "com.termux", "files", "home")) + "/"
         for path in ROOT.rglob("*.py"):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn(forbidden, text, str(path))
