@@ -10,24 +10,24 @@ from typing import Callable, Iterable
 
 
 TRANSIENT = {"timeout", "network", "server"}
-NON_TRANSIENT = {"quota", "auth", "model", "configuration", "invalid_request"}
 
 
 class RoutingError(RuntimeError):
-    def __init__(self, kind: str, message: str):
+    def __init__(self, kind: str, message: str, attempts: list["RouteAttempt"] | None = None):
         super().__init__(message)
         self.kind = kind
         self.message = message
+        self.attempts = attempts or []
 
 
 def classify_error(exc: Exception) -> str:
     """Classify provider failures without exposing credentials or raw payloads."""
     import urllib.error
 
-    if isinstance(exc, (TimeoutError, TimeoutError)):
+    if isinstance(exc, TimeoutError):
         return "timeout"
     if isinstance(exc, urllib.error.HTTPError):
-        if exc.code == 401 or exc.code == 403:
+        if exc.code in {401, 403}:
             return "auth"
         if exc.code == 429:
             return "quota"
@@ -88,11 +88,7 @@ class Router:
         return result
 
     def run(self, primary: dict, ask: Callable[[dict], str]) -> RoutingResult:
-        if primary.get("offline") is True:
-            chain = [primary]
-        else:
-            chain = self.order(primary)
-
+        chain = [primary] if primary.get("offline") is True else self.order(primary)
         attempts: list[RouteAttempt] = []
         for model in chain:
             name = str(model.get("name") or model.get("model") or "unknown")
@@ -104,7 +100,7 @@ class Router:
                 kind = classify_error(exc)
                 attempts.append(RouteAttempt(name, kind, kind if kind != "provider" else "provider_error"))
                 if kind not in TRANSIENT:
-                    raise RoutingError(kind, f"Provider '{name}' failed: {kind}") from exc
+                    raise RoutingError(kind, f"Provider '{name}' failed: {kind}", attempts) from exc
 
         last = attempts[-1] if attempts else None
-        raise RoutingError(last.outcome if last else "configuration", "No provider succeeded")
+        raise RoutingError(last.outcome if last else "configuration", "No provider succeeded", attempts)
