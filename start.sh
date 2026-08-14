@@ -1,7 +1,11 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
+set -e
 
-cd ~/YasinCoder
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
-bash install.sh
+if [ -f "$ROOT/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    . "$ROOT/.venv/bin/activate"
+fi
 
-exec bash
+exec python "$ROOT/main.py" "$@"
