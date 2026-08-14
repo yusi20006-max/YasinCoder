@@ -6,7 +6,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from .base import ProviderAdapter, ProviderAuthenticationError, ProviderConfigurationError, ProviderRequestError, ProviderUnavailable
+from .base import ProviderAdapter, ProviderAuthenticationError, ProviderConfigurationError, ProviderError, ProviderRequestError, ProviderUnavailable
 
 
 class OpenAICompatibleAdapter(ProviderAdapter):
@@ -62,5 +62,4 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         if not choices:
             raise ProviderRequestError("provider returned no choices")
         message = choices[0].get("message") or {}
-        content = message.get("content", "")
-        return str(content)
+        return str(message.get("content", ""))
