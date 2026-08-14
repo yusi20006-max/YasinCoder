@@ -1,0 +1,1 @@
+"""Deterministic YasinCoder test suite."""
