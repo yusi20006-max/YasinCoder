@@ -34,6 +34,9 @@ class ProviderManager:
             return bool(CF_ACCOUNT_ID and CF_API_TOKEN)
         return ModelEndpoint(model).health()
 
+    def routing(self):
+        return dict(self.last_routing)
+
     def _configured_models(self):
         models = {m.get("name"): m for m in self.models.list() if m.get("name")}
         if CF_ACCOUNT_ID and CF_API_TOKEN and "cloudflare" not in models:
@@ -51,14 +54,13 @@ class ProviderManager:
             return self.providers["cloudflare"].chat(prompt)
         raise ValueError("unsupported provider type")
 
-    def ask(self, prompt):
-        selected = MODEL.strip() if MODEL.strip() and MODEL.strip() != "auto" else None
+    def ask(self, prompt, model_name=None):
+        selected = model_name or (MODEL.strip() if MODEL.strip() and MODEL.strip() != "auto" else None)
         primary = self.models.get(selected) if selected else self.models.default()
         if not primary:
-            self.last_routing = {"selected": None, "attempts": [], "offline": False}
+            self.last_routing = {"selected": None, "attempts": [], "offline": False, "error": "configuration"}
             return "No AI model configured. Run model setup or set YASIN_BASE_URL/YASIN_MODEL_NAME."
 
-        # Offline mode is explicit and never consults cloud providers.
         offline = bool(primary.get("offline", False))
         if offline and primary.get("type") == "cloudflare":
             raise RoutingError("configuration", "Offline mode cannot use a cloud provider")
@@ -70,7 +72,7 @@ class ProviderManager:
         except RoutingError as exc:
             self.last_routing = {
                 "selected": None,
-                "attempts": [a.__dict__ for a in getattr(exc, "attempts", [])],
+                "attempts": [a.__dict__ for a in exc.attempts],
                 "offline": offline,
                 "error": exc.kind,
             }
