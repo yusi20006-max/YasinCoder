@@ -1,8 +1,20 @@
+import subprocess
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def tracked_files():
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [ROOT / line for line in result.stdout.splitlines() if line]
 
 
 class CleanCloneTests(unittest.TestCase):
@@ -13,6 +25,7 @@ class CleanCloneTests(unittest.TestCase):
             "config.example",
             "docs/ARCHITECTURE.md",
             "docs/CONFIGURATION.md",
+            "docs/GATEWAY.md",
             "gateway.py",
             "providers",
             "routing.py",
@@ -23,29 +36,26 @@ class CleanCloneTests(unittest.TestCase):
             with self.subTest(path=relative):
                 self.assertTrue((ROOT / relative).exists(), relative)
 
-    def test_repository_contains_no_bundled_model_weights(self):
+    def test_tracked_tree_contains_no_bundled_model_weights(self):
         forbidden_suffixes = {".gguf", ".safetensors", ".bin"}
         forbidden_fragments = ("qwen3-1.7b", "qwen3-local", "llama-server")
 
-        for path in ROOT.rglob("*"):
-            if ".git" in path.parts:
-                continue
-            if path.is_file():
-                self.assertNotIn(path.suffix.lower(), forbidden_suffixes, str(path))
-                self.assertFalse(
-                    any(fragment in path.name.lower() for fragment in forbidden_fragments),
-                    str(path),
-                )
+        for path in tracked_files():
+            self.assertNotIn(path.suffix.lower(), forbidden_suffixes, str(path))
+            self.assertFalse(
+                any(fragment in path.name.lower() for fragment in forbidden_fragments),
+                str(path),
+            )
 
-    def test_source_does_not_contain_developer_runtime_paths(self):
+    def test_tracked_source_has_no_developer_runtime_paths(self):
         banned_paths = (
             "/data/data/com.termux/files/home/",
             "/data/data/com.termux/files/usr/",
         )
         source_suffixes = {".py", ".sh", ".yml", ".yaml", ".json", ".toml"}
 
-        for path in ROOT.rglob("*"):
-            if ".git" in path.parts or not path.is_file() or path.suffix.lower() not in source_suffixes:
+        for path in tracked_files():
+            if path.suffix.lower() not in source_suffixes:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
             for banned in banned_paths:
