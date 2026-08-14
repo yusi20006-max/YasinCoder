@@ -11,6 +11,12 @@ YASIN_MODELS_FILE=
 YASIN_TEMPERATURE=0.2
 YASIN_MAX_TOKENS=4096
 
+# Gateway security: local-only is the default. Set a key before exposing it remotely.
+# YASIN_API_KEY=replace-with-a-random-secret
+# Comma-separated browser origins; empty means no cross-origin browser access.
+YASIN_ALLOWED_ORIGINS=
+YASIN_MAX_BODY_BYTES=1048576
+
 # Routing policy is stored with the external model definition, not in Git.
 # Example models.json entry:
 # {
