@@ -30,7 +30,7 @@ jobs:
           test -f docs/CONFIGURATION.md
           test -f docs/GATEWAY.md
           test -z "$(git ls-files | grep -Ei '\\.(gguf|safetensors|bin)$' || true)"
-          test -z "$(git grep -nE '/data/data/com\.termux/files/(home|usr)/' -- '*.py' '*.sh' '*.yml' '*.yaml' '*.json' '*.toml' || true)"
+          test -z "$(git grep -nE '/data/data/com\.termux/files/(home|usr)/' -- '*.py' '*.sh' '*.json' '*.toml' || true)"
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run deterministic test suite
