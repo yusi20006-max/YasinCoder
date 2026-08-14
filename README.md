@@ -21,9 +21,9 @@ The exact provider/model configuration is intentionally user-owned and portable.
 - `commands/` — user-facing coding operations
 - `providers/` — AI provider adapters
 - `config.py` — compatibility configuration layer; user/runtime values should come from environment or external config
-- `docs/` — architecture, configuration, roadmap and operational documentation
+- `docs/` — architecture, configuration, gateway and operational documentation
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) and [`docs/GATEWAY.md`](docs/GATEWAY.md).
 
 ## Repository rules
 
@@ -31,6 +31,17 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/CONFIGURATION.md`]
 - Never commit API keys, tokens, local runtime state, logs or caches.
 - Never depend on the developer's absolute filesystem paths.
 - A clean clone must be configurable for a different local model without source edits.
+
+## Verification
+
+From a fresh clone:
+
+```bash
+python -m compileall -q .
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+The deterministic suite includes gateway contract/security tests and clean-clone invariants for model portability and developer-path isolation.
 
 ## Roadmap
 
