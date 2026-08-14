@@ -11,6 +11,19 @@ YASIN_MODELS_FILE=
 YASIN_TEMPERATURE=0.2
 YASIN_MAX_TOKENS=4096
 
+# Routing policy is stored with the external model definition, not in Git.
+# Example models.json entry:
+# {
+#   "name": "local",
+#   "type": "llama_cpp",
+#   "base_url": "http://127.0.0.1:18080",
+#   "model": "my-local-model",
+#   "offline": true,
+#   "fallbacks": []
+# }
+# For online mode, set ordered fallback names, e.g. ["local", "cloud"]
+# Offline mode ignores all fallbacks and never contacts a cloud provider.
+
 # Cloudflare is optional.
 CF_ACCOUNT_ID=
 CF_API_TOKEN=
