@@ -19,6 +19,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Verify clean-clone invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f LICENSE
+          test -f config.example
+          test -f docs/ARCHITECTURE.md
+          test -f docs/CONFIGURATION.md
+          test -f docs/GATEWAY.md
+          test -z "$(git ls-files | grep -Ei '\\.(gguf|safetensors|bin)$' || true)"
+          test -z "$(git grep -nE '/data/data/com\.termux/files/(home|usr)/' -- '*.py' '*.sh' '*.yml' '*.yaml' '*.json' '*.toml' || true)"
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run deterministic test suite
