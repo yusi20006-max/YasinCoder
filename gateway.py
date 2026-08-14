@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from providers.manager import ProviderManager
+from routing import RoutingError
 
 
 class GatewayError(Exception):
@@ -37,6 +38,9 @@ class Gateway:
             })
         return result
 
+    def routing(self) -> dict[str, Any]:
+        return self.manager.routing()
+
     def chat(self, payload: dict[str, Any]) -> dict[str, Any]:
         messages = payload.get("messages")
         if not isinstance(messages, list) or not messages:
@@ -59,9 +63,12 @@ class Gateway:
             raise GatewayError("model_not_found", f"Model '{requested}' is not configured", 404)
 
         try:
-            output = self.manager.ask(prompt)
+            output = self.manager.ask(prompt, model_name=requested)
+        except RoutingError as exc:
+            status = 401 if exc.kind == "auth" else 429 if exc.kind == "quota" else 503 if exc.kind in {"timeout", "network", "server"} else 502
+            raise GatewayError(f"provider_{exc.kind}", f"Provider routing failed: {exc.kind}", status) from exc
         except Exception as exc:
-            raise GatewayError("provider_error", str(exc), 502) from exc
+            raise GatewayError("provider_error", "Configured provider failed", 502) from exc
 
         model_name = (model or {}).get("name") or (model or {}).get("model") or requested or "auto"
         return {
@@ -75,6 +82,7 @@ class Gateway:
                 "finish_reason": "stop",
             }],
             "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "routing": self.routing(),
         }
 
 
@@ -93,14 +101,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path in ("/health", "/api/status"):
-            self._send(200, {"ok": True, "service": "yasin-coder-gateway"})
+            self._send(200, {"ok": True, "service": "yasin-coder-gateway", "routing": self.gateway.routing()})
+            return
+        if self.path in ("/api/routing", "/v1/routing"):
+            self._send(200, {"ok": True, "routing": self.gateway.routing()})
             return
         if self.path in ("/v1/models", "/api/models"):
             try:
                 models = self.gateway.models()  # type: ignore[union-attr]
                 self._send(200, {"object": "list", "data": models})
-            except Exception as exc:
-                self._send(500, {"error": {"code": "internal_error", "message": str(exc)}})
+            except Exception:
+                self._send(500, {"error": {"code": "internal_error", "message": "Unable to list models"}})
             return
         self._send(404, {"error": {"code": "not_found", "message": "Route not found"}})
 
@@ -118,8 +129,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, result)
             except GatewayError as exc:
                 self._send(exc.status, {"error": {"code": exc.code, "message": exc.message}})
-            except Exception as exc:
-                self._send(500, {"error": {"code": "internal_error", "message": str(exc)}})
+            except Exception:
+                self._send(500, {"error": {"code": "internal_error", "message": "Gateway request failed"}})
             return
         self._send(404, {"error": {"code": "not_found", "message": "Route not found"}})
 
