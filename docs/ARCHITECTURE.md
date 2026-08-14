@@ -1,105 +1,63 @@
 # YasinCoder Architecture
 
-Status: **Phase 2 — Local AI integration verified**
+## 1. Product boundary
 
-Repository: `yusi20006-max/YasinCoder`
-Default branch: `master`
+YasinCoder is the coding-agent product. It owns project analysis, coding tools, AI provider abstraction, execution policy, sessions, and the mobile/web control surface.
 
-## Mission
-YasinCoder is the canonical Yasin coding-agent application repository. It owns the coding-agent experience, project intelligence, code operations, model selection, and provider integration contracts.
+Yasin AI remains a separate AI/runtime project. Shared concepts may be documented, but YasinCoder does not depend on Yasin AI's private runtime state.
 
-## Target system boundary
+## 2. Runtime layers
 
 ```text
-                         YasinCoder
-                              │
-             ┌────────────────┼────────────────┐
-             │                │                │
-        Agent Core       Project Brain      Commands
-             │                │                │
-             └────────────────┼────────────────┘
-                              │
-                        AI Provider Layer
-                              │
-                ┌─────────────┴─────────────┐
-                │                           │
-          Local AI Gateway             Cloud AI
-                │                           │
-          ┌─────┴─────┐              Gemini / other
-          │           │
-       Qwen local   Gemini CLI
-       llama.cpp
-          │
-     127.0.0.1:18080
-          ▲
-          │
-   Web Control/UI
-   127.0.0.1:18765
+User / PWA
+    |
+    v
+Universal Gateway / Application API
+    |
+    +--> Routing & policy
+    |       |
+    |       +--> Local provider (user-selected runtime/model)
+    |       +--> Online provider (Gemini / compatible / custom)
+    |
+    +--> Coding Agent Engine
+            |
+            +--> Workspace / project services
+            +--> File/search/edit tools
+            +--> Git tools
+            +--> Test/build tools
+            +--> Permission & sandbox policy
 ```
 
-## Current verified runtime
+## 3. Repository boundaries
 
-| Component | Address / command | State |
-|---|---|---|
-| Web gateway | `127.0.0.1:18765` | HTTP 200 verified |
-| Python server | `server.py` | running |
-| Qwen server | `127.0.0.1:18080` | healthy |
-| Model | `Qwen3-1.7B-Q4_K_M.gguf` | loaded |
-| Alias | `qwen3-local` | verified |
-| Context | 4096 | verified |
-| Gemini CLI | `/data/data/com.termux/files/usr/bin/gemini` | executable |
-| ripgrep | Termux `rg` 15.2.0 | installed |
+- `core/`: reusable project intelligence and domain services.
+- `commands/`: user operations and command orchestration.
+- `providers/`: provider adapters; no provider should own application state.
+- `docs/`: implementation and operational documentation.
+- `tests/`: deterministic unit/integration/E2E verification as the test suite grows.
+- Runtime data belongs outside Git: models, credentials, caches, logs, sessions and backups.
 
-## Gateway responsibilities
+## 4. AI boundary
 
-Read:
-- `/api/status` — aggregate gateway, Qwen, Gemini and startup state.
-- `/api/logs` — recent Qwen/gateway/startup logs.
+The application talks to a provider-neutral contract. A local model is an implementation detail selected by the user. The repository must not assume Qwen, a particular GGUF, llama.cpp, a specific port, or a developer filesystem path.
 
-Control:
-- `/api/start`
-- `/api/stop`
-- `/api/restart`
+The same UI and agent workflow must work whether the selected backend is local/offline or online.
 
-AI:
-- `/api/qwen`
-- `/api/gemini`
+## 5. First-run contract
 
-Process control must remain separate from provider logic so additional local/cloud providers can be added without rewriting the UI.
+The eventual first-run wizard presents two top-level choices:
 
-## Local Qwen path
+- **Offline/local**: discover or configure a local runtime, then register the user's model/endpoint.
+- **Online**: choose a supported provider/model, then collect only the credentials/configuration required by that provider.
 
-```text
-Browser → server.py :18765 → llama-server :18080 → Qwen3 1.7B Q4_K_M
-```
+The wizard writes user-owned configuration outside the repository.
 
-Observed metadata: about 2.03B parameters, about 1.276 GB GGUF, Q4_K Medium, configured context 4096, 4 slots. The model is a replaceable infrastructure component rather than part of the agent core.
+## 6. Security boundary
 
-## Gemini path
+The default deployment is localhost-only. Remote access, network-enabled tools, shell execution, Git mutation and other sensitive operations are explicit capabilities governed by later permission/sandbox phases.
 
-Gemini is an external CLI provider. The 2026-08-14 audit verified that the CLI exists and is callable, but the configured `gemini-3.5-flash` account exhausted its daily free-tier quota and returned HTTP 429. Therefore Gemini availability is verified, successful generation at audit time is not, and Qwen is the verified offline fallback.
+Secrets must never be emitted into logs, UI responses, commits or documentation.
 
-## Lifecycle
+## 7. Clean-clone invariant
 
-```text
-START → ensure Qwen → health check → check Gemini → ensure gateway → SYSTEM_READY
-STOP  → stop Qwen/system
-RESTART → STOP → START
-```
-
-The lifecycle was exercised through shell scripts and HTTP control routes.
-
-## Security boundary
-
-Qwen binds to `127.0.0.1`, limiting exposure to the device. llama.cpp currently reports CORS `*` and no API key. This is acceptable only for localhost development. Before remote exposure, add authentication, restrictive CORS, rate/request limits, command allowlisting, audit logging, secret isolation, and safe PID/process ownership.
-
-## Known issues from Phase 1/2
-
-1. Route scan shows duplicate `/api/start` and `/api/stop` branches; clean these during the next code audit.
-2. Gemini CLI still emitted a `Ripgrep is not available` fallback message after Termux `rg` 15.2.0 was installed. Investigate the CLI environment/path; this does not block Qwen.
-3. Normalize Gemini quota failures into a provider state such as `quota_exhausted`.
-4. Evaluate larger local models only after measuring device RAM, thermal behavior and latency.
-
-## Architectural rule
-
-YasinCoder owns the coding-agent application and provider orchestration contract. Local model servers and external CLIs are replaceable infrastructure. The UI must consume stable gateway JSON contracts instead of depending directly on llama.cpp or Gemini CLI details.
+A clean clone must contain enough source and templates to install and configure YasinCoder, but never require the developer's model, credentials, absolute paths or runtime state.
