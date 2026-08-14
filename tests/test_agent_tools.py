@@ -46,6 +46,11 @@ def test_shell_requires_execute_permission(tmp_path):
     assert allowed["ok"] and allowed["stdout"].strip() == "1"
 
 
+def test_timeout_is_reported_and_terminated(tmp_path):
+    result = execute("shell.exec", {"command": "python -c 'import time; time.sleep(5)'", "root": str(tmp_path), "timeout": 0.1, "permissions": EXEC_POLICY})
+    assert result["ok"] is False and result["timed_out"] is True
+
+
 def test_network_and_admin_commands_are_separate_capabilities(tmp_path):
     network = execute("shell.exec", {"command": "curl https://example.com", "root": str(tmp_path), "permissions": EXEC_POLICY})
     assert network["ok"] is False and "network" in network["error"]
