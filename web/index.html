@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="YasinCoder mobile-first AI coding control center">
+  <link rel="manifest" href="/web/manifest.webmanifest">
+  <link rel="stylesheet" href="/web/styles.css">
+  <title>YasinCoder</title>
+</head>
+<body>
+  <header class="topbar"><div><strong>YasinCoder</strong><small>AI coding control center</small></div><span id="connection" class="pill">checking…</span></header>
+  <main>
+    <section class="card chat"><div class="section-title"><h2>Chat</h2><span id="modelLabel">auto</span></div><div id="messages" class="messages"><div class="message system">Ready. Choose a model and send a request.</div></div><form id="chatForm" class="composer"><select id="model"></select><textarea id="prompt" rows="2" placeholder="Ask YasinCoder…" required></textarea><button>Send</button></form></section>
+    <section class="grid">
+      <div class="card"><h2>System</h2><div class="actions"><button data-action="start">Start</button><button data-action="restart">Restart</button><button data-action="stop" class="danger">Stop</button></div><pre id="status">Loading…</pre></div>
+      <div class="card"><h2>Routing</h2><pre id="routing">Loading…</pre></div>
+    </section>
+    <section class="card"><div class="section-title"><h2>Live logs</h2><button id="refreshLogs" class="secondary">Refresh</button></div><pre id="logs" class="logs">No logs endpoint exposed.</pre></section>
+    <section class="card"><h2>Workspace & tools</h2><div class="notice">The control center is provider-neutral. Workspace, Git, tools and approvals are shown through gateway capabilities when those APIs are enabled.</div><div id="capabilities" class="chips"></div></section>
+  </main>
+  <script src="/web/app.js" defer></script>
+</body>
+</html>
