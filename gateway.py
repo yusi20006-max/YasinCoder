@@ -8,6 +8,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from core.gateway_contract import chat_response, error_response, validate_chat_request
 from providers.manager import ProviderManager
 from routing import RoutingError
 from security import DEFAULT_SECURITY_POLICY, SecurityPolicy
@@ -38,15 +39,14 @@ class Gateway:
         return dict(self.manager.last_routing)
 
     def chat(self, payload: dict[str, Any]) -> dict[str, Any]:
-        messages = payload.get("messages")
-        if not isinstance(messages, list) or not messages or len(messages) > 128:
-            raise GatewayError("invalid_request", "messages must be a non-empty list with at most 128 items")
+        try:
+            requested, messages = validate_chat_request(payload)
+        except ValueError as exc:
+            raise GatewayError("invalid_request", str(exc)) from exc
+
         text = "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
         if not text.strip():
             raise GatewayError("invalid_request", "messages contain no text content")
-        requested = payload.get("model")
-        if requested is not None and (not isinstance(requested, str) or len(requested) > 256):
-            raise GatewayError("invalid_request", "model must be a short string")
         model = self.manager.models.get(requested) if requested else self.manager.models.default()
         if requested and not model:
             raise GatewayError("model_not_found", f"Model '{requested}' is not configured", 404)
@@ -57,12 +57,13 @@ class Gateway:
             raise GatewayError(f"provider_{exc.kind}", f"Provider routing failed: {exc.kind}", status) from exc
         except Exception as exc:
             raise GatewayError("provider_error", "Configured provider failed", 502) from exc
-        return {
-            "id": f"yasin-{int(time.time() * 1000)}", "object": "chat.completion",
-            "created": int(time.time()), "model": (model or {}).get("name") or requested or "auto",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": str(output)}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}, "routing": self.routing(),
-        }
+        return chat_response(
+            request_id=f"yasin-{int(time.time() * 1000)}",
+            model=(model or {}).get("name") or requested or "auto",
+            content=str(output),
+            created=int(time.time()),
+            routing=self.routing(),
+        )
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -84,10 +85,10 @@ class Handler(BaseHTTPRequestHandler):
     def _authorized(self) -> bool:
         origin = self.headers.get("Origin")
         if not self.security.origin_allowed(origin):
-            self._send(403, {"error": {"code": "origin_forbidden", "message": "Origin is not allowed"}})
+            self._send(403, error_response("origin_forbidden", "Origin is not allowed"))
             return False
         if not self.security.authenticate(self.headers.get("Authorization", "").removeprefix("Bearer ").strip()):
-            self._send(401, {"error": {"code": "unauthorized", "message": "Authentication required"}})
+            self._send(401, error_response("unauthorized", "Authentication required"))
             return False
         return True
 
@@ -123,27 +124,27 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True, "routing": self.gateway.routing()}); return
         if self.path in ("/v1/models", "/api/models"):
             try: self._send(200, {"object": "list", "data": self.gateway.models()})
-            except Exception: self._send(500, {"error": {"code": "internal_error", "message": "Unable to list models"}})
+            except Exception: self._send(500, error_response("internal_error", "Unable to list models"))
             return
-        self._send(404, {"error": {"code": "not_found", "message": "Route not found"}})
+        self._send(404, error_response("not_found", "Route not found"))
 
     def do_POST(self) -> None:
         if not self._authorized(): return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length < 0 or length > self.security.max_body_bytes:
-                self._send(413, {"error": {"code": "payload_too_large", "message": "Request body is too large"}}); return
+                self._send(413, error_response("payload_too_large", "Request body is too large")); return
             payload = json.loads(self.rfile.read(length) or b"{}")
             if not isinstance(payload, dict):
-                self._send(400, {"error": {"code": "invalid_json", "message": "Request body must be a JSON object"}}); return
+                self._send(400, error_response("invalid_json", "Request body must be a JSON object")); return
         except (ValueError, json.JSONDecodeError):
-            self._send(400, {"error": {"code": "invalid_json", "message": "Request body must be JSON"}}); return
+            self._send(400, error_response("invalid_json", "Request body must be JSON")); return
         if self.path in ("/v1/chat/completions", "/api/chat"):
             try: self._send(200, self.gateway.chat(payload))
-            except GatewayError as exc: self._send(exc.status, {"error": {"code": exc.code, "message": exc.message}})
-            except Exception: self._send(500, {"error": {"code": "internal_error", "message": "Gateway request failed"}})
+            except GatewayError as exc: self._send(exc.status, error_response(exc.code, exc.message))
+            except Exception: self._send(500, error_response("internal_error", "Gateway request failed"))
             return
-        self._send(404, {"error": {"code": "not_found", "message": "Route not found"}})
+        self._send(404, error_response("not_found", "Route not found"))
 
     def log_message(self, format: str, *args: Any) -> None: return
 
