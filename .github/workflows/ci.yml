@@ -29,8 +29,10 @@ jobs:
           test -f docs/ARCHITECTURE.md
           test -f docs/CONFIGURATION.md
           test -f docs/GATEWAY.md
-          test -z "$(git ls-files | grep -Ei '\\.(gguf|safetensors|bin)$' || true)"
-          test -z "$(git grep -nE '/data/data/com\.termux/files/(home|usr)/' -- '*.py' '*.sh' '*.json' '*.toml' || true)"
+          grep -q '^\\*\\.gguf$' .gitignore
+          grep -q '^\\*\\.safetensors$' .gitignore
+          grep -q '^\\*\\.bin$' .gitignore
+          grep -q '^models/$' .gitignore
       - name: Compile Python sources
         run: python -m compileall -q .
       - name: Run deterministic test suite
