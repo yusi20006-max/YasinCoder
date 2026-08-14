@@ -22,12 +22,7 @@ class LocalProvider(BaseProvider):
         self.timeout = float(timeout or os.getenv("YASIN_LOCAL_TIMEOUT", "120"))
 
     def capabilities(self):
-        return {
-            "chat": True,
-            "streaming": False,
-            "runtime": self.runtime,
-            "model": self.model,
-        }
+        return {"chat": True, "streaming": False, "runtime": self.runtime, "model": self.model}
 
     def _request(self, path, payload=None):
         url = self.base_url + path
@@ -52,7 +47,7 @@ class LocalProvider(BaseProvider):
             if self.runtime == "ollama":
                 self._request("/api/tags")
             else:
-                self._request("/models")
+                self._request("/v1/models")
             return True
         except Exception:
             return False
@@ -68,7 +63,6 @@ class LocalProvider(BaseProvider):
             )
             return str(result.get("message", {}).get("content", ""))
 
-        # OpenAI-compatible contract used by llama.cpp and other local servers.
         endpoint = "/v1/chat/completions" if not self.base_url.endswith("/v1") else "/chat/completions"
         result = self._request(
             endpoint,
