@@ -18,8 +18,12 @@ class CloudflareProvider(ProviderAdapter):
         super().__init__(model)
         self.account_id = str(model.get("account_id", ""))
         self.api_token = str(model.get("api_token", ""))
-        self.model_name = str(model.get("model") or model.get("name") or "")
+        self._model_name = str(model.get("model") or model.get("name") or "")
         self.timeout = float(model.get("timeout", 120))
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
 
     def health(self) -> bool:
         return bool(self.account_id and self.api_token and self.model_name)
@@ -44,6 +48,6 @@ class CloudflareProvider(ProviderAdapter):
         result = data.get("result") or {}
         if "response" in result:
             return str(result["response"])
-        if isinstance(result, dict) and result.get("output"):
+        if result.get("output"):
             return str(result["output"])
         raise ProviderRequestError("Cloudflare returned no model output")
