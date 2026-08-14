@@ -1,14 +1,12 @@
 """Portable model registry and runtime discovery.
 
-Machine-specific model definitions live outside the repository. The registry
-uses XDG_CONFIG_HOME (or ~/.config) and can be overridden with
-YASIN_MODELS_FILE for tests or custom deployments.
+Machine-specific model definitions live outside the repository. Discovery never
+assumes a developer model name; local runtimes advertise their own models.
 """
 from __future__ import annotations
 
 import json
 import os
-import shutil
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -52,6 +50,7 @@ class ModelManager:
     def upsert(self, model: dict[str, Any]) -> dict[str, Any]:
         if not model.get("name") or not model.get("type"):
             raise ValueError("model requires name and type")
+        model = dict(model)
         models = self.data["models"]
         for i, current in enumerate(models):
             if current.get("name") == model["name"]:
@@ -84,36 +83,43 @@ class ModelManager:
         name = os.getenv("YASIN_MODEL", "").strip() or self.data.get("default", "")
         return self.get(name) if name else (self.data["models"][0] if self.data["models"] else None)
 
+    @staticmethod
+    def _json(base: str, path: str) -> dict[str, Any] | None:
+        try:
+            with urllib.request.urlopen(base.rstrip("/") + path, timeout=2) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception:
+            return None
+
+    def _discover_openai_models(self, base: str) -> list[str]:
+        data = self._json(base, "/v1/models") or {}
+        values = data.get("data") or data.get("models") or []
+        names = []
+        for item in values:
+            if isinstance(item, dict) and item.get("id"):
+                names.append(str(item["id"]))
+            elif isinstance(item, dict) and item.get("name"):
+                names.append(str(item["name"]))
+        return names
+
     def discover(self) -> list[dict[str, Any]]:
         found: list[dict[str, Any]] = []
         env_url = os.getenv("YASIN_BASE_URL", "").strip()
         env_model = os.getenv("YASIN_MODEL_NAME", "").strip()
         if env_url:
             found.append({"name": env_model or "configured-endpoint", "type": "openai_compatible", "base_url": env_url, "model": env_model})
-        probes = [
-            ("llama-cpp", "http://127.0.0.1:18080", "qwen3-local"),
-            ("ollama", "http://127.0.0.1:11434", ""),
-        ]
-        for name, base, model in probes:
-            if self._healthy(base):
-                found.append({"name": name, "type": "ollama" if name == "ollama" else "llama_cpp", "base_url": base, "model": model})
+
+        for base, kind in (("http://127.0.0.1:18080", "llama_cpp"), ("http://127.0.0.1:11434", "ollama")):
+            names = self._discover_openai_models(base) if kind == "llama_cpp" else []
+            if kind == "ollama":
+                data = self._json(base, "/api/tags") or {}
+                names = [str(x.get("name")) for x in data.get("models", []) if isinstance(x, dict) and x.get("name")]
+            for model_name in names:
+                found.append({"name": f"{kind}:{model_name}", "type": kind, "base_url": base, "model": model_name, "offline": True})
         return found
 
-    @staticmethod
-    def _healthy(base: str) -> bool:
-        for endpoint in ("/health", "/api/tags", "/v1/models"):
-            try:
-                with urllib.request.urlopen(base.rstrip("/") + endpoint, timeout=1.5) as response:
-                    if 200 <= response.status < 300:
-                        return True
-            except Exception:
-                continue
-        return False
-
     def ensure_discovered(self) -> list[dict[str, Any]]:
-        discovered = []
-        for model in self.discover():
-            discovered.append(self.upsert(model))
+        discovered = [self.upsert(model) for model in self.discover()]
         if not self.default() and discovered:
             self.select(discovered[0]["name"])
         return discovered
