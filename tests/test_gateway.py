@@ -1,7 +1,8 @@
 import json
 import unittest
-from urllib.request import Request, urlopen
 from threading import Thread
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 from gateway import create_server
 
@@ -20,11 +21,12 @@ class FakeModels:
 class FakeManager:
     def __init__(self):
         self.models = FakeModels()
+        self.last_routing = {"selected": "fake-local", "attempts": [{"model": "fake-local", "outcome": "success"}], "offline": True}
 
     def list_models(self):
         return self.models.list()
 
-    def ask(self, prompt):
+    def ask(self, prompt, model_name=None):
         return f"reply:{prompt}"
 
 
@@ -41,6 +43,14 @@ class GatewayContractTests(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
 
+    def post(self, path, payload):
+        request = Request(
+            self.base + path,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        return urlopen(request)
+
     def test_health(self):
         with urlopen(self.base + "/health") as response:
             self.assertEqual(response.status, 200)
@@ -53,31 +63,41 @@ class GatewayContractTests(unittest.TestCase):
             self.assertEqual(data["data"][0]["provider"], "openai_compatible")
 
     def test_chat_completions(self):
-        request = Request(
-            self.base + "/v1/chat/completions",
-            data=json.dumps({
-                "model": "fake-local",
-                "messages": [{"role": "user", "content": "hello"}],
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urlopen(request) as response:
+        with self.post("/v1/chat/completions", {
+            "model": "fake-local",
+            "messages": [{"role": "user", "content": "hello"}],
+        }) as response:
             data = json.load(response)
             self.assertEqual(data["object"], "chat.completion")
             self.assertEqual(data["model"], "fake-local")
             self.assertEqual(data["choices"][0]["message"]["content"], "reply:hello")
+            self.assertIn("routing", data)
+
+    def test_invalid_message_schema(self):
+        with self.assertRaises(HTTPError) as raised:
+            self.post("/v1/chat/completions", {"messages": [{"content": "hello"}]})
+        self.assertEqual(raised.exception.code, 400)
+        body = json.loads(raised.exception.read())
+        self.assertEqual(body["error"]["code"], "invalid_request")
 
     def test_unknown_model(self):
-        request = Request(
-            self.base + "/v1/chat/completions",
-            data=json.dumps({
+        with self.assertRaises(HTTPError) as raised:
+            self.post("/v1/chat/completions", {
                 "model": "missing",
                 "messages": [{"role": "user", "content": "hello"}],
-            }).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with self.assertRaises(Exception):
-            urlopen(request)
+            })
+        self.assertEqual(raised.exception.code, 404)
+        body = json.loads(raised.exception.read())
+        self.assertEqual(body["error"]["code"], "model_not_found")
+
+    def test_compatibility_endpoint_matches_contract(self):
+        with self.post("/api/chat", {
+            "model": "fake-local",
+            "messages": [{"role": "user", "content": "hello"}],
+        }) as response:
+            data = json.load(response)
+            self.assertEqual(data["object"], "chat.completion")
+            self.assertEqual(data["choices"][0]["message"]["role"], "assistant")
 
 
 if __name__ == "__main__":
