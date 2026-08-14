@@ -1,8 +1,37 @@
+# Python runtime
 __pycache__/
-*.pyc
+*.py[cod]
+
+# User/runtime state
 memory.json
 tasks.json
+config.json
+.env
+.env.*
+!.env.example
+
+# Logs, caches and backups
 logs/
 cache/
 backups/
-config.json
+*.log
+
+# Local AI/model artifacts — NEVER commit model weights
+models/
+model/
+*.gguf
+*.gguf.*
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Local virtual environments
+.venv/
+venv/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

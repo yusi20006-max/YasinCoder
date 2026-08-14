@@ -1,0 +1,13 @@
+# Copy these settings into your shell or external runtime config.
+# Do not put real secrets in this file.
+
+YASIN_PROJECT_PATH=/path/to/your/project
+YASIN_MODEL=auto
+YASIN_BASE_URL=
+YASIN_API_KEY=
+YASIN_TEMPERATURE=0.2
+YASIN_MAX_TOKENS=4096
+
+CF_ACCOUNT_ID=
+CF_API_TOKEN=
+CF_MODEL=@cf/meta/llama-3-8b-instruct
