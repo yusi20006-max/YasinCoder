@@ -1,13 +1,21 @@
 # Copy these settings into your shell or external runtime config.
-# Do not put real secrets in this file.
+# Do not put real secrets or machine-specific model paths in Git.
 
 YASIN_PROJECT_PATH=/path/to/your/project
+# Optional model name override. Otherwise the external registry default is used.
 YASIN_MODEL=auto
+YASIN_MODEL_NAME=
 YASIN_BASE_URL=
 YASIN_API_KEY=
+YASIN_MODELS_FILE=
 YASIN_TEMPERATURE=0.2
 YASIN_MAX_TOKENS=4096
 
+# Cloudflare is optional.
 CF_ACCOUNT_ID=
 CF_API_TOKEN=
 CF_MODEL=@cf/meta/llama-3-8b-instruct
+
+# Local model definitions are stored outside the clone by default:
+# ~/.config/yasin-coder/models.json
+# Supported runtime types: llama_cpp, ollama, openai_compatible, cloudflare.
