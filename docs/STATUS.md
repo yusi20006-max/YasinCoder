@@ -4,7 +4,7 @@ Audit date: **2026-08-14**
 
 ## Overall
 
-**Phase 1 complete. Phase 2 integration verified partially. Phase 3 is next.**
+**Phase 12 testing and verification is complete. Phase 13 documentation synchronization is in progress.**
 
 ## Verified
 
@@ -13,7 +13,7 @@ Audit date: **2026-08-14**
 - Gateway starts and reports `SYSTEM_READY`.
 - Web UI returns HTTP 200.
 - Qwen health returns `{"status":"ok"}`.
-- Qwen model `qwen3-local` is loaded.
+- A user-selected local Qwen model can be registered and served through llama.cpp.
 - `/api/qwen` returns a successful generated response (`QWEN_OK`).
 - `/api/status` reports gateway, Qwen and Gemini availability.
 - `/api/logs` returns structured JSON logs.
@@ -21,37 +21,41 @@ Audit date: **2026-08-14**
 - `/api/restart` successfully stops and starts Qwen.
 - Final process checks show one Python gateway and one llama-server process.
 - Termux ripgrep 15.2.0 is installed.
+- Deterministic CI/testing work from Phase 12 is merged.
 
-## Gemini status
+## AI provider status
 
-Gemini CLI exists at `/data/data/com.termux/files/usr/bin/gemini` and is discoverable by the gateway.
+### Local/offline
 
-Generation was not successful during the audit because the configured `gemini-3.5-flash` account had exhausted its daily free-tier quota. The CLI returned HTTP 429 / `TerminalQuotaError`.
+Local AI is provider/model-agnostic by design. The repository does **not** bundle a GGUF model and must not depend on the developer's Qwen model, filesystem path, port, or runtime state. Users configure their own llama.cpp, Ollama, or compatible local endpoint.
 
-This is a provider/account quota condition, not evidence that the gateway route is missing.
+### Gemini / online
+
+Gemini CLI exists and is discoverable by the gateway. Generation was not successful during the audit because the configured `gemini-3.5-flash` account had exhausted its daily free-tier quota. The CLI returned HTTP 429 / `TerminalQuotaError`.
+
+This is an environment/provider-account condition, not evidence that the gateway route is missing. Online providers must therefore be documented as credential- and quota-dependent.
 
 ## Performance observations
 
-Observed Qwen test timings were approximately:
+Observed local Qwen tests were approximately:
 
 - prompt processing: 11–12 tokens/sec;
 - generation: roughly 3–7 tokens/sec in the recorded tests;
-- model load: roughly 3–4 seconds in the recorded restarts.
+- model load: roughly 3–4 seconds in recorded restarts.
 
 These are development observations, not formal benchmarks.
 
-## Current blockers
+## Current known limitations
 
-1. Gemini successful generation needs a quota-available account/model for end-to-end validation.
-2. Gemini CLI still reported that ripgrep was unavailable even after Termux `rg` was installed; environment propagation needs investigation.
-3. Duplicate start/stop route branches need cleanup.
-4. Local gateway security must be hardened before any remote exposure.
+1. Successful Gemini generation requires a quota-available account/model for live provider validation.
+2. Provider-specific CLI environment behavior may vary across installations.
+3. Duplicate route branches observed during the development audit remain technical cleanup candidates.
+4. Local gateway security must be hardened before remote exposure.
 
-## Backup references from the implementation session
+## Portability invariant
 
-- Phase 1 build: `/data/data/com.termux/files/home/gemini-web-phase1-build-20260814-211404`
-- Phase 1.1: `/data/data/com.termux/files/home/gemini-web-phase1.1-backup-20260814-211543`
-- Phase 1 full test: `/data/data/com.termux/files/home/gemini-web-fulltest-20260814-212154`
-- Phase 2 audit: `/data/data/com.termux/files/home/gemini-web-phase2-audit-20260814-212251`
+A clean clone must work without access to the developer's machine, credentials, local model, absolute paths, runtime state, or Termux backups. Runtime/model data belongs outside Git.
 
-These are local Termux backup paths and are retained as implementation evidence only; they are not repository dependencies.
+## Backup references
+
+Historical local Termux backup paths are retained as implementation evidence only and are not repository dependencies.
