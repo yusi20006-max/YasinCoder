@@ -2,20 +2,23 @@
 
 The facade keeps model reasoning separate from side effects: models request
 named tools, tools return structured results, and file mutations are dry-run
-until explicitly approved with ``apply=True``.
+until explicitly approved with ``apply=True`` plus write permission.
 """
 from __future__ import annotations
 
 from core.agent_tools import execute
+from core.permissions import PermissionPolicy
 
 
 class CodingAgent:
-    def __init__(self, workspace=None):
+    def __init__(self, workspace=None, permissions=None):
         self.workspace = workspace
+        self.permissions = permissions if isinstance(permissions, PermissionPolicy) else PermissionPolicy.from_mapping(permissions)
         self.history = []
 
     def tool(self, name, **payload):
         payload.setdefault("root", self.workspace)
+        payload.setdefault("permissions", self.permissions.as_dict())
         result = execute(name, payload)
         self.history.append({"tool": name, "result": result})
         return result
