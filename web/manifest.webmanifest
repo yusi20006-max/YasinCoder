@@ -1,0 +1,11 @@
+{
+  "name": "YasinCoder",
+  "short_name": "YasinCoder",
+  "description": "Mobile-first AI coding control center",
+  "start_url": "/web/",
+  "scope": "/web/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#111827",
+  "lang": "en"
+}
