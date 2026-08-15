@@ -6,6 +6,32 @@ AI coding agent with a portable, provider-agnostic architecture.
 
 YasinCoder is being rebuilt as a clean-clone project: runtime state, credentials, caches, logs, and local model files stay outside Git.
 
+## Installation
+
+YasinCoder is a normal Python distribution and can be installed from a clean clone:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install .
+```
+
+For development/editable installs:
+
+```bash
+python -m pip install -e .
+```
+
+After installation, both the public package and CLI are available outside the repository directory:
+
+```bash
+python -c "import yasincoder; print(yasincoder.__version__)"
+yasincoder info
+```
+
+On Windows, activate the virtual environment with `.venv\\Scripts\\activate` instead of `. .venv/bin/activate`.
+
 ## Supported deployment modes
 
 At first run, users will choose:
@@ -41,7 +67,15 @@ python -m compileall -q .
 python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The deterministic suite includes gateway contract/security tests and clean-clone invariants for model portability and developer-path isolation.
+To verify the distribution boundary itself:
+
+```bash
+python -m pip install .
+python -c "import yasincoder"
+yasincoder info
+```
+
+The deterministic suite includes gateway contract/security tests, packaging smoke coverage, and clean-clone invariants for model portability and developer-path isolation.
 
 ## Roadmap
 
