@@ -13,6 +13,7 @@ from commands.review import ReviewCommand
 from commands.fix import FixCommand
 from commands.refactor import RefactorCommand
 from commands.explain import ExplainCommand
+from commands.autonomous import AutonomousCommand
 
 
 def main():
@@ -61,6 +62,16 @@ def main():
         filename = sys.argv[2]
         question = " ".join(sys.argv[3:]) if len(sys.argv) > 3 else "Explain this file."
         print(ExplainCommand().run(filename, question))
+    elif cmd == "autonomous":
+        if len(sys.argv) < 3:
+            print("Usage: autonomous <coding task>")
+            return
+        print(AutonomousCommand().run(" ".join(sys.argv[2:])))
+    elif cmd == "plan":
+        if len(sys.argv) < 3:
+            print("Usage: plan <coding task>")
+            return
+        print(AutonomousCommand().plan(" ".join(sys.argv[2:])))
     else:
         print("Unknown command.")
 

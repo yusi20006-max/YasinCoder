@@ -1,7 +1,5 @@
 class HelpCommand:
-
     def run(self):
-
         return """
 
 YasinCoder Commands
@@ -29,6 +27,10 @@ fix
 refactor
 
 explain
+
+plan <coding task>
+
+autonomous <coding task>
 
 doctor
 
