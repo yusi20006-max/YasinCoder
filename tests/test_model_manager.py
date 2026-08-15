@@ -74,6 +74,45 @@ class ModelManagerTests(unittest.TestCase):
                     with self.assertRaisesRegex(ModelValidationError, message):
                         manager.upsert(model)
 
+    def test_discovery_finds_generic_endpoint_models_without_persisting_key(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ,
+            {"YASIN_BASE_URL": "https://example.invalid/v1", "YASIN_API_KEY": "SECRET"},
+            clear=False,
+        ):
+            manager = ModelManager(Path(tmp) / "models.json")
+            with patch.object(manager, "_json", return_value={"data": [{"id": "model-a"}, {"id": "model-b"}]}):
+                found = manager.discover()
+            self.assertEqual([item["model"] for item in found if item["type"] == "openai_compatible"], ["model-a", "model-b"])
+            self.assertTrue(all("api_key" not in item for item in found))
+            self.assertTrue(all(item.get("api_key_env") == "YASIN_API_KEY" for item in found if item["type"] == "openai_compatible"))
+
+    def test_discovery_finds_gemini_and_uses_env_reference(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(
+            os.environ,
+            {"GEMINI_API_KEY": "SECRET", "GEMINI_MODEL": "gemini-test"},
+            clear=False,
+        ):
+            manager = ModelManager(Path(tmp) / "models.json")
+            with patch.object(manager, "_json", return_value={"data": [{"id": "gemini-test"}]}):
+                found = manager.discover()
+            gemini = [item for item in found if item["type"] == "gemini"]
+            self.assertEqual(len(gemini), 1)
+            self.assertEqual(gemini[0]["model"], "gemini-test")
+            self.assertEqual(gemini[0]["api_key_env"], "GEMINI_API_KEY")
+            self.assertNotIn("api_key", gemini[0])
+
+    def test_discovery_finds_ollama_models(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ModelManager(Path(tmp) / "models.json")
+            def fake_json(base, path, *, timeout=3):
+                if "11434" in base:
+                    return {"models": [{"name": "qwen"}]}
+                return None
+            with patch.object(manager, "_json", side_effect=fake_json):
+                found = manager.discover()
+            self.assertEqual([(item["type"], item["model"]) for item in found], [("ollama", "qwen")])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,8 @@ def create_adapter(model: dict[str, Any]) -> ProviderAdapter:
         return LlamaCppAdapter(model)
     if kind == "ollama":
         return OllamaAdapter(model)
+    if kind == "gemini":
+        return OpenAICompatibleAdapter(model, provider_type="gemini")
     if kind in {"openai_compatible", "openai", "custom"}:
         return OpenAICompatibleAdapter(model)
     if kind == "cloudflare":

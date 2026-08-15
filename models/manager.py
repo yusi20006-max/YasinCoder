@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,15 @@ DEFAULT_CONFIG_DIR = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config"))
 DEFAULT_MODELS_FILE = DEFAULT_CONFIG_DIR / "models.json"
 SCHEMA_VERSION = 2
 SECRET_KEYS = {"api_key", "api_token", "token", "password", "secret"}
-SUPPORTED_TYPES = {"openai_compatible", "openai", "custom", "ollama", "llama_cpp", "cloudflare"}
+SUPPORTED_TYPES = {
+    "openai_compatible",
+    "openai",
+    "custom",
+    "ollama",
+    "llama_cpp",
+    "cloudflare",
+    "gemini",
+}
 
 
 def _path() -> Path:
@@ -165,39 +174,107 @@ class ModelManager:
         return resolved
 
     @staticmethod
-    def _json(base: str, path: str) -> dict[str, Any] | None:
+    def _json(base: str, path: str, *, timeout: float = 3) -> dict[str, Any] | None:
         try:
-            with urllib.request.urlopen(base.rstrip("/") + path, timeout=2) as response:
+            request = urllib.request.Request(base.rstrip("/") + path, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
-        except Exception:
+        except (OSError, ValueError, urllib.error.URLError, urllib.error.HTTPError):
             return None
 
+    @staticmethod
+    def _openai_base(base: str) -> str:
+        return base.rstrip("/")[:-3] if base.rstrip("/").endswith("/v1") else base.rstrip("/")
+
     def _discover_openai_models(self, base: str) -> list[str]:
-        data = self._json(base, "/v1/models") or {}
+        data = self._json(self._openai_base(base), "/v1/models") or {}
         values = data.get("data") or data.get("models") or []
-        return [str(x.get("id") or x.get("name")) for x in values if isinstance(x, dict) and (x.get("id") or x.get("name"))]
+        return [
+            str(x.get("id") or x.get("name"))
+            for x in values
+            if isinstance(x, dict) and (x.get("id") or x.get("name"))
+        ]
+
+    def _discover_ollama_models(self, base: str) -> list[str]:
+        data = self._json(base, "/api/tags") or {}
+        return [
+            str(x.get("name"))
+            for x in data.get("models", [])
+            if isinstance(x, dict) and x.get("name")
+        ]
 
     def discover(self) -> list[dict[str, Any]]:
+        """Discover configured and locally reachable providers without persisting secrets."""
         found: list[dict[str, Any]] = []
+
         env_url = os.getenv("YASIN_BASE_URL", "").strip()
         env_model = os.getenv("YASIN_MODEL_NAME", "").strip()
-        env_key = os.getenv("YASIN_API_KEY", "")
         if env_url:
-            found.append({"name": env_model or "configured-endpoint", "type": "openai_compatible", "base_url": env_url, "model": env_model, "api_key_env": "YASIN_API_KEY" if env_key else "", "timeout": float(os.getenv("YASIN_TIMEOUT", "120")), "temperature": float(os.getenv("YASIN_TEMPERATURE", "0.2")), "max_tokens": int(os.getenv("YASIN_MAX_TOKENS", "4096"))})
-        cf_id, cf_token, cf_model = os.getenv("CF_ACCOUNT_ID", ""), os.getenv("CF_API_TOKEN", ""), os.getenv("CF_MODEL", "")
-        if cf_id and cf_token and cf_model:
-            found.append({"name": "cloudflare", "type": "cloudflare", "model": cf_model, "account_id_env": "CF_ACCOUNT_ID", "api_token_env": "CF_API_TOKEN"})
-        for base, kind in (("http://127.0.0.1:18080", "llama_cpp"), ("http://127.0.0.1:11434", "ollama")):
-            names = self._discover_openai_models(base) if kind == "llama_cpp" else []
-            if kind == "ollama":
-                data = self._json(base, "/api/tags") or {}
-                names = [str(x.get("name")) for x in data.get("models", []) if isinstance(x, dict) and x.get("name")]
+            names = self._discover_openai_models(env_url)
+            if env_model and env_model not in names:
+                names.insert(0, env_model)
+            if not names:
+                names = ["configured-endpoint"] if env_model else []
             for model_name in names:
-                found.append({"name": f"{kind}:{model_name}", "type": kind, "base_url": base, "model": model_name, "offline": True})
+                found.append({
+                    "name": model_name if len(names) == 1 else f"openai:{model_name}",
+                    "type": "openai_compatible",
+                    "base_url": env_url,
+                    "model": model_name if model_name != "configured-endpoint" else env_model,
+                    "api_key_env": "YASIN_API_KEY" if os.getenv("YASIN_API_KEY") else "",
+                    "timeout": float(os.getenv("YASIN_TIMEOUT", "120")),
+                    "temperature": float(os.getenv("YASIN_TEMPERATURE", "0.2")),
+                    "max_tokens": int(os.getenv("YASIN_MAX_TOKENS", "4096")),
+                })
+
+        google_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if google_key:
+            gemini_base = os.getenv(
+                "GEMINI_BASE_URL",
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+            ).strip()
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+            names = self._discover_openai_models(gemini_base)
+            if gemini_model and gemini_model not in names:
+                names.insert(0, gemini_model)
+            for model_name in names:
+                found.append({
+                    "name": f"gemini:{model_name}",
+                    "type": "gemini",
+                    "base_url": gemini_base,
+                    "model": model_name,
+                    "api_key_env": "GEMINI_API_KEY" if os.getenv("GEMINI_API_KEY") else "GOOGLE_API_KEY",
+                })
+
+        cf_id = os.getenv("CF_ACCOUNT_ID", "").strip()
+        cf_token = os.getenv("CF_API_TOKEN", "").strip()
+        cf_model = os.getenv("CF_MODEL", "").strip()
+        if cf_id and cf_model:
+            found.append({
+                "name": "cloudflare",
+                "type": "cloudflare",
+                "model": cf_model,
+                "account_id_env": "CF_ACCOUNT_ID",
+                "api_token_env": "CF_API_TOKEN" if cf_token else "",
+            })
+
+        local_endpoints = (
+            ("http://127.0.0.1:18080", "llama_cpp", self._discover_openai_models),
+            ("http://127.0.0.1:11434", "ollama", self._discover_ollama_models),
+        )
+        for base, kind, discoverer in local_endpoints:
+            for model_name in discoverer(base):
+                found.append({
+                    "name": f"{kind}:{model_name}",
+                    "type": kind,
+                    "base_url": base,
+                    "model": model_name,
+                    "offline": True,
+                })
         return found
 
     def ensure_discovered(self) -> list[dict[str, Any]]:
-        discovered = []
+        discovered: list[dict[str, Any]] = []
         for model in self.discover():
             try:
                 discovered.append(self.upsert(model))

@@ -32,11 +32,18 @@ class ProviderManager:
     def _configured_models(self):
         models = {m.get("name"): m for m in self.models.list() if m.get("name")}
         if CF_ACCOUNT_ID and CF_API_TOKEN and CF_MODEL and "cloudflare" not in models:
-            models["cloudflare"] = {"name": "cloudflare", "type": "cloudflare", "model": CF_MODEL, "account_id": CF_ACCOUNT_ID, "api_token": CF_API_TOKEN}
+            models["cloudflare"] = {
+                "name": "cloudflare",
+                "type": "cloudflare",
+                "model": CF_MODEL,
+                "account_id": CF_ACCOUNT_ID,
+                "api_token": CF_API_TOKEN,
+            }
         return models
 
     def _adapter(self, model):
-        return create_adapter(model)
+        """Resolve environment-backed secrets only for the in-memory adapter."""
+        return create_adapter(ModelManager.resolve_secrets(model))
 
     def health(self, name=None):
         model = self.models.get(name) if name else self.models.default()
@@ -69,8 +76,17 @@ class ProviderManager:
         try:
             result = router.run(primary, lambda model: self._ask_model(model, prompt))
         except RoutingError as exc:
-            self.last_routing = {"selected": None, "attempts": [a.__dict__ for a in exc.attempts], "offline": offline, "error": exc.kind}
+            self.last_routing = {
+                "selected": None,
+                "attempts": [a.__dict__ for a in exc.attempts],
+                "offline": offline,
+                "error": exc.kind,
+            }
             raise
 
-        self.last_routing = {"selected": result.selected, "attempts": [a.__dict__ for a in result.attempts], "offline": offline}
+        self.last_routing = {
+            "selected": result.selected,
+            "attempts": [a.__dict__ for a in result.attempts],
+            "offline": offline,
+        }
         return result.output
