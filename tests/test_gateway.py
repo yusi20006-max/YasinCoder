@@ -4,13 +4,30 @@ from threading import Thread
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from gateway import create_server
+from providers.manager import ProviderManager
 from routing import RoutingError
 from security import SecurityPolicy
 
 class FakeModels:
-    def list(self): return [{"name": "fake-local", "type": "openai_compatible", "capabilities": ["chat", "streaming"], "default": True}]
+    def list(self): return [{"name": "fake-local", "type": "openai_compatible", "capabilities": ["chat", "streaming"], "default": True, "offline": True}]
     def get(self, name): return self.list()[0] if name == "fake-local" else None
     def default(self): return self.list()[0]
+
+class FakeAdapter:
+    def __init__(self, model): self.model = model
+    def health(self): return True
+    def chat(self, prompt): return f"reply:{prompt}"
+    def stream_chat(self, prompt):
+        yield "hel"
+        yield "lo"
+
+class ProviderBackedFakeManager(ProviderManager):
+    def __init__(self):
+        super().__init__()
+        self.models = FakeModels()
+
+    def _adapter(self, model):
+        return FakeAdapter(model)
 
 class FakeManager:
     def __init__(self): self.models = FakeModels(); self.last_routing = {"selected": "fake-local", "attempts": [{"model": "fake-local", "outcome": "success"}], "offline": True}
@@ -63,6 +80,18 @@ class GatewayContractTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as raised: urlopen(request)
             self.assertEqual(raised.exception.code, 503); body = json.loads(raised.exception.read()); self.assertEqual(body["error"]["code"], "provider_network")
         finally: server.shutdown(); server.server_close()
+
+class GatewayProviderIntegrationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.server = create_server("127.0.0.1", 0, ProviderBackedFakeManager()); cls.thread = Thread(target=cls.server.serve_forever, daemon=True); cls.thread.start(); cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+    @classmethod
+    def tearDownClass(cls): cls.server.shutdown(); cls.server.server_close()
+    def test_gateway_executes_through_provider_manager(self):
+        request = Request(self.base + "/v1/chat/completions", data=json.dumps({"model": "fake-local", "messages": [{"role": "user", "content": "hello"}]}).encode(), headers={"Content-Type": "application/json"})
+        with urlopen(request) as response:
+            data = json.load(response)
+        self.assertEqual(data["choices"][0]["message"]["content"], "reply:hello")
 
 class GatewaySecurityTests(unittest.TestCase):
     @classmethod
