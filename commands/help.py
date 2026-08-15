@@ -32,6 +32,8 @@ plan <coding task>
 
 autonomous <coding task>
 
+testgen [report|generate|run|verify] [--changed] [--base REF] [--timeout SECONDS]
+
 doctor
 
 """

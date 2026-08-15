@@ -62,8 +62,9 @@ class GitManager:
         return bool(self._run("status", "--porcelain").stdout.strip())
 
     def has_conflicts(self) -> bool:
+        conflict_codes = {"DD", "AU", "UD", "UA", "DU", "AA", "UU"}
         for line in self._run("status", "--porcelain=v1").stdout.splitlines():
-            if len(line) >= 2 and (line[0] in "UAD" or line[1] in "UAD"):
+            if len(line) >= 2 and line[:2] in conflict_codes:
                 return True
         return False
 
