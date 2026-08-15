@@ -6,7 +6,13 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from .base import ProviderAdapter, ProviderAuthenticationError, ProviderConfigurationError, ProviderRequestError, ProviderUnavailable
+from .base import (
+    ProviderAdapter,
+    ProviderAuthenticationError,
+    ProviderConfigurationError,
+    ProviderRequestError,
+    ProviderUnavailable,
+)
 
 
 class OllamaAdapter(ProviderAdapter):
@@ -25,7 +31,11 @@ class OllamaAdapter(ProviderAdapter):
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
-        request = urllib.request.Request(self.base_url + path, data=json.dumps(payload).encode() if payload is not None else None, headers=headers)
+        request = urllib.request.Request(
+            self.base_url + path,
+            data=json.dumps(payload).encode() if payload is not None else None,
+            headers=headers,
+        )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
@@ -38,13 +48,32 @@ class OllamaAdapter(ProviderAdapter):
         except (json.JSONDecodeError, UnicodeDecodeError):
             raise ProviderRequestError("Ollama returned invalid JSON") from None
 
+    def list_models(self) -> list[str]:
+        data = self._request("/api/tags")
+        return [
+            str(item.get("name"))
+            for item in data.get("models", [])
+            if isinstance(item, dict) and item.get("name")
+        ]
+
     def health(self) -> bool:
         try:
-            self._request("/api/tags")
+            self.list_models()
             return True
         except Exception:
             return False
 
+    def validate_model(self) -> bool:
+        if not self.model_name:
+            raise ProviderConfigurationError("Ollama model is not configured")
+        names = self.list_models()
+        return self.model_name in names
+
     def chat(self, prompt: str) -> str:
-        data = self._request("/api/generate", {"model": self.model_name, "prompt": prompt, "stream": False})
+        if not self.model_name:
+            raise ProviderConfigurationError("Ollama model is not configured")
+        data = self._request(
+            "/api/generate",
+            {"model": self.model_name, "prompt": prompt, "stream": False},
+        )
         return str(data.get("response", ""))
