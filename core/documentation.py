@@ -11,7 +11,6 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Iterable
 
 GENERATED_DIR = Path("docs/generated")
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "build", "dist", ".pytest_cache", ".mypy_cache"}
@@ -151,9 +150,9 @@ def _redact(text: str) -> str:
 def render(kind: str, root: str = ".", base_ref: str = "HEAD^") -> str:
     records = analyze(root)
     if kind == "api":
-        return api_markdown(records)
+        return _redact(api_markdown(records))
     if kind == "architecture":
-        return architecture_markdown(records)
+        return _redact(architecture_markdown(records))
     if kind == "changes":
         return _redact(json.dumps(changed_files(root, base_ref), indent=2, sort_keys=True) + "\n")
     if kind == "report":
@@ -174,7 +173,6 @@ def write_generated(root: str = ".", base_ref: str = "HEAD^") -> list[Path]:
     written = []
     for kind, filename in outputs.items():
         path = out / filename
-        # Only files owned by this generator may be replaced.
         content = render(kind, str(base), base_ref)
         path.write_text(content, encoding="utf-8")
         written.append(path)
