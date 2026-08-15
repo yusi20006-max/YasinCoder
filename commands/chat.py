@@ -49,21 +49,22 @@ class ChatCommand:
             session.provider = options.provider
         if options.model:
             session.model = options.model
+        self.sessions.save(session)
 
         prompt = " ".join(options.prompt).strip()
         if options.interactive or not prompt:
             self._repl(session)
             return
-
         self._turn(session, prompt)
 
     def _turn(self, session, prompt: str) -> None:
+        request = session.prompt(prompt)
         session.add("user", prompt)
         self.sessions.save(session)
         try:
-            response = self.client.chat(session.prompt(prompt), provider=session.provider)
+            response = self.client.chat(request, provider=session.provider)
         except TypeError:
-            response = self.client.chat(session.prompt(prompt))
+            response = self.client.chat(request)
         except KeyboardInterrupt:
             print("\nInterrupted; session preserved.")
             return
