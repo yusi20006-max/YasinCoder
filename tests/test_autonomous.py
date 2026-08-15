@@ -101,3 +101,20 @@ class AutonomousEngineTests(unittest.TestCase):
             result = engine.resume(plan.plan_id)
             self.assertEqual(result.status, "completed")
             self.assertEqual(calls, [])
+
+    def test_generated_test_verification_is_optional_and_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "sample.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+            store = CheckpointStore(root / "state")
+            engine = AutonomousEngine(
+                planner=lambda _task: make_plan(),
+                tool_runner=lambda *_: {"ok": True},
+                checkpoints=store,
+                verify_generated_tests=True,
+                workspace=root,
+            )
+            result = engine.run_task("verify")
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(result.steps[-1].id, "generated-tests")
+            self.assertEqual(result.steps[-1].result["ok"], True)
