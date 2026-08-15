@@ -143,7 +143,7 @@ class ModelManager:
 
     def default(self) -> dict[str, Any] | None:
         requested = os.getenv("YASIN_MODEL", "").strip()
-        if requested:
+        if requested and requested.lower() != "auto":
             return self.get(requested)
         configured = str(self.data.get("default", "")).strip()
         if configured:
@@ -183,16 +183,7 @@ class ModelManager:
         env_model = os.getenv("YASIN_MODEL_NAME", "").strip()
         env_key = os.getenv("YASIN_API_KEY", "")
         if env_url:
-            found.append({
-                "name": env_model or "configured-endpoint",
-                "type": "openai_compatible",
-                "base_url": env_url,
-                "model": env_model,
-                "api_key_env": "YASIN_API_KEY" if env_key else "",
-                "timeout": float(os.getenv("YASIN_TIMEOUT", "120")),
-                "temperature": float(os.getenv("YASIN_TEMPERATURE", "0.2")),
-                "max_tokens": int(os.getenv("YASIN_MAX_TOKENS", "4096")),
-            })
+            found.append({"name": env_model or "configured-endpoint", "type": "openai_compatible", "base_url": env_url, "model": env_model, "api_key_env": "YASIN_API_KEY" if env_key else "", "timeout": float(os.getenv("YASIN_TIMEOUT", "120")), "temperature": float(os.getenv("YASIN_TEMPERATURE", "0.2")), "max_tokens": int(os.getenv("YASIN_MAX_TOKENS", "4096"))})
         cf_id, cf_token, cf_model = os.getenv("CF_ACCOUNT_ID", ""), os.getenv("CF_API_TOKEN", ""), os.getenv("CF_MODEL", "")
         if cf_id and cf_token and cf_model:
             found.append({"name": "cloudflare", "type": "cloudflare", "model": cf_model, "account_id_env": "CF_ACCOUNT_ID", "api_token_env": "CF_API_TOKEN"})
