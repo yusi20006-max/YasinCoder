@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backup import BackupManager
+from backup import BackupError, BackupManager
 from core.file_writer import FileWriter
 from git_manager import GitError, GitManager
 
@@ -25,6 +25,17 @@ class GitBackupTests(unittest.TestCase):
             source.write_text("after", encoding="utf-8")
             restored = backups.restore(checkpoint)
             self.assertEqual(Path(restored).read_text(encoding="utf-8"), "before")
+
+    def test_backup_rejects_path_outside_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = root.parent / "outside.txt"
+            outside.write_text("secret", encoding="utf-8")
+            try:
+                with self.assertRaises(BackupError):
+                    BackupManager(root, root / "backups").checkpoint(outside)
+            finally:
+                outside.unlink(missing_ok=True)
 
     def test_file_writer_creates_pre_edit_checkpoint(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -62,6 +73,15 @@ class GitBackupTests(unittest.TestCase):
             manager = GitManager(root)
             with self.assertRaisesRegex(GitError, "nothing staged"):
                 manager.commit("should fail")
+
+    def test_git_manager_refuses_protected_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            git(root, "init")
+            env = root / ".env"
+            env.write_text("TOKEN=secret", encoding="utf-8")
+            with self.assertRaisesRegex(GitError, "protected"):
+                GitManager(root).stage(".env")
 
     def test_git_restore_does_not_remove_untracked_file(self):
         with tempfile.TemporaryDirectory() as directory:
