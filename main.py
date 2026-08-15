@@ -17,9 +17,9 @@ from commands.fix import FixCommand
 from commands.refactor import RefactorCommand
 from commands.explain import ExplainCommand
 from commands.memory import MemoryCommand
-
 from commands.index import IndexCommand
 from commands.stats import StatsCommand
+from commands.docs import DocsCommand
 
 
 def main():
@@ -61,6 +61,21 @@ def main():
         IndexCommand().run()
     elif command == "stats":
         StatsCommand().run()
+    elif command == "docs":
+        action = args[0] if args and not args[0].startswith("-") else "all"
+        base_ref = "HEAD^"
+        output = None
+        if "--base" in args:
+            i = args.index("--base")
+            if i + 1 >= len(args):
+                raise SystemExit("Usage: docs [all|api|architecture|report|changes] [--base REF] [--output FILE]")
+            base_ref = args[i + 1]
+        if "--output" in args:
+            i = args.index("--output")
+            if i + 1 >= len(args):
+                raise SystemExit("Usage: docs [all|api|architecture|report|changes] [--base REF] [--output FILE]")
+            output = args[i + 1]
+        print(DocsCommand().run(action, base_ref=base_ref, output=output))
     else:
         print("Unknown command.")
 
