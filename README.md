@@ -42,12 +42,34 @@ Copy `.env.example` as a reference and keep secrets/runtime state outside Git.
 - Generic local AI adapter
 - Cloudflare gateway
 - Modular architecture
+- Deterministic source documentation and project reports
 
 ## Local model portability
 
 For llama.cpp, point `YASIN_LOCAL_BASE_URL` at its OpenAI-compatible `/v1` API and set `YASIN_LOCAL_MODEL` to the alias exposed by that server. The model file itself remains outside the repository and can be any compatible model selected by the user.
 
 For Ollama, set `YASIN_LOCAL_RUNTIME=ollama`, point `YASIN_LOCAL_BASE_URL` at the Ollama server, and set `YASIN_LOCAL_MODEL` to the installed model name.
+
+## Documentation and project reports
+
+The `docs` command analyzes Python source with the standard-library AST parser and never imports application code. Runtime directories, environment files, model registries and build artifacts are excluded.
+
+```bash
+python main.py docs api
+python main.py docs architecture
+python main.py docs report
+python main.py docs changes --base HEAD^
+python main.py docs all
+```
+
+`docs all` writes only generator-owned files under `docs/generated/`:
+
+- `api.md` — source-derived API inventory
+- `architecture.md` — deterministic module/import map
+- `report.json` — project metrics and changed-file summary
+- `changes.json` — bounded git change summary
+
+A single report can be written elsewhere with `--output FILE`. Hand-written documentation outside `docs/generated/` is never overwritten.
 
 ## Tests
 
