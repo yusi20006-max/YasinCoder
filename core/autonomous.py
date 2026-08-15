@@ -10,10 +10,11 @@ import json
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable
 
 from core.agent_tools import execute as execute_tool
 from core.runtime import user_data_dir
+from core.test_generator import TestGenerator
 from providers.manager import ProviderManager
 
 
@@ -159,6 +160,8 @@ class AutonomousEngine:
         approval: Callable[[PlanStep], bool] | None = None,
         checkpoints: CheckpointStore | None = None,
         max_steps: int = 12,
+        verify_generated_tests: bool = False,
+        workspace: str | Path | None = None,
     ):
         self.planner = planner or ModelPlanner()
         self.tool_runner = tool_runner or self._run_tool
@@ -166,6 +169,8 @@ class AutonomousEngine:
         self.approval = approval
         self.checkpoints = checkpoints or CheckpointStore()
         self.max_steps = max_steps
+        self.verify_generated_tests = verify_generated_tests
+        self.workspace = Path(workspace or Path.cwd()).expanduser().resolve()
 
     @staticmethod
     def _run_tool(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -174,6 +179,15 @@ class AutonomousEngine:
     @staticmethod
     def _default_verify(step: PlanStep, result: dict[str, Any]) -> bool:
         return bool(result.get("ok"))
+
+    def _verify_generated_tests(self) -> dict[str, Any]:
+        generator = TestGenerator(self.workspace)
+        report = generator.generate(changed_only=True)
+        if not report.supported:
+            return {"ok": False, "error": "test generator does not support this project", "generation": report.as_dict()}
+        result = generator.run()
+        result["generation"] = report.as_dict()
+        return result
 
     def plan(self, task: str) -> ExecutionPlan:
         if not task.strip():
@@ -240,6 +254,24 @@ class AutonomousEngine:
             step.status = "completed"
             plan.current_step += 1
             self.checkpoints.save(plan)
+
+        if self.verify_generated_tests:
+            generated_result = self._verify_generated_tests()
+            plan.error = None
+            plan.status = "completed" if generated_result.get("ok") else "failed"
+            if not generated_result.get("ok"):
+                plan.error = "generated-test verification failed"
+            plan.steps.append(PlanStep(
+                id="generated-tests",
+                description="Generate and execute focused verification tests",
+                tool="test.run",
+                payload={"generated": True},
+                verify="generated tests pass",
+                status="completed" if generated_result.get("ok") else "failed",
+                result=generated_result,
+            ))
+            self.checkpoints.save(plan)
+            return plan
 
         plan.status = "completed"
         self.checkpoints.save(plan)
