@@ -3,11 +3,18 @@ import urllib.error
 import unittest
 from unittest.mock import patch
 
-from providers.base import ProviderAuthenticationError, ProviderUnavailable
+from providers.base import (
+    ProviderAdapter,
+    ProviderAuthenticationError,
+    ProviderConfigurationError,
+    ProviderRequestError,
+    ProviderUnavailable,
+)
+from providers.cloudflare import CloudflareProvider
 from providers.factory import create_adapter
+from providers.http_compatible import OpenAICompatibleAdapter
 from providers.llama_cpp import LlamaCppAdapter
 from providers.ollama import OllamaAdapter
-from providers.http_compatible import OpenAICompatibleAdapter
 
 
 class Response:
@@ -27,12 +34,34 @@ class Response:
 
 
 class ProviderAdapterTests(unittest.TestCase):
-    def test_factory_selects_local_adapters(self):
-        llama = create_adapter({"name": "local", "type": "llama_cpp", "base_url": "http://local", "model": "m"})
-        ollama = create_adapter({"name": "local", "type": "ollama", "base_url": "http://local", "model": "m"})
-        self.assertIsInstance(llama, LlamaCppAdapter)
-        self.assertIsInstance(ollama, OllamaAdapter)
-        self.assertTrue(llama.offline and ollama.offline)
+    def assert_contract(self, adapter):
+        self.assertIsInstance(adapter, ProviderAdapter)
+        self.assertTrue(adapter.name)
+        self.assertTrue(adapter.model_name)
+        info = adapter.info()
+        self.assertEqual(info.name, adapter.name)
+        self.assertEqual(info.provider, adapter.provider_type)
+        self.assertEqual(info.model, adapter.model_name)
+        self.assertIsInstance(info.capabilities, tuple)
+        self.assertIn("chat", info.capabilities)
+
+    def test_factory_selects_all_supported_adapters(self):
+        cases = [
+            ({"name": "llama", "type": "llama_cpp", "base_url": "http://local", "model": "m"}, LlamaCppAdapter, True),
+            ({"name": "ollama", "type": "ollama", "base_url": "http://local", "model": "m"}, OllamaAdapter, True),
+            ({"name": "remote", "type": "openai_compatible", "base_url": "http://remote", "model": "m"}, OpenAICompatibleAdapter, False),
+            ({"name": "cf", "type": "cloudflare", "account_id": "a", "api_token": "t", "model": "m"}, CloudflareProvider, False),
+        ]
+        for model, expected_type, offline in cases:
+            with self.subTest(model=model["type"]):
+                adapter = create_adapter(model)
+                self.assertIsInstance(adapter, expected_type)
+                self.assertIs(adapter.offline, offline)
+                self.assert_contract(adapter)
+
+    def test_factory_rejects_unknown_provider(self):
+        with self.assertRaises(ProviderConfigurationError):
+            create_adapter({"name": "bad", "type": "unknown"})
 
     def test_openai_compatible_chat_normalizes_response(self):
         adapter = OpenAICompatibleAdapter({"name": "remote", "base_url": "http://remote", "model": "m"})
@@ -46,12 +75,30 @@ class ProviderAdapterTests(unittest.TestCase):
             with self.assertRaises(ProviderAuthenticationError):
                 adapter.chat("hello")
 
+    def test_openai_compatible_empty_response_is_normalized(self):
+        adapter = OpenAICompatibleAdapter({"name": "remote", "base_url": "http://remote", "model": "m"})
+        with patch("urllib.request.urlopen", return_value=Response({"choices": []})):
+            with self.assertRaises(ProviderRequestError):
+                adapter.chat("hello")
+
     def test_unavailable_error_does_not_expose_credentials(self):
         adapter = OpenAICompatibleAdapter({"name": "remote", "base_url": "http://remote", "model": "m", "api_key": "SECRET"})
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("offline")):
             with self.assertRaises(ProviderUnavailable) as context:
                 adapter.chat("hello")
         self.assertNotIn("SECRET", str(context.exception))
+
+    def test_ollama_contract_and_chat(self):
+        adapter = OllamaAdapter({"name": "ollama", "type": "ollama", "base_url": "http://local", "model": "m"})
+        self.assert_contract(adapter)
+        with patch("urllib.request.urlopen", return_value=Response({"response": "ok"})):
+            self.assertEqual(adapter.chat("hello"), "ok")
+
+    def test_cloudflare_contract_and_chat(self):
+        adapter = CloudflareProvider({"name": "cf", "type": "cloudflare", "account_id": "a", "api_token": "t", "model": "m"})
+        self.assert_contract(adapter)
+        with patch("urllib.request.urlopen", return_value=Response({"result": {"response": "ok"}})):
+            self.assertEqual(adapter.chat("hello"), "ok")
 
 
 if __name__ == "__main__":
