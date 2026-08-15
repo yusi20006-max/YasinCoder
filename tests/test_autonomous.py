@@ -1,10 +1,11 @@
 import json
+import tempfile
+import unittest
 from pathlib import Path
 
 from core.autonomous import (
     AutonomousEngine,
     CheckpointStore,
-    ExecutionPlan,
     PlanValidationError,
     validate_plan,
 )
@@ -23,85 +24,80 @@ def make_plan(tool="workspace.info"):
     })
 
 
-def test_plan_rejects_unknown_tools():
-    try:
-        validate_plan({"task": "x", "steps": [{"tool": "rm -rf"}]})
-    except PlanValidationError:
-        return
-    assert False, "unknown tool must be rejected"
+class AutonomousEngineTests(unittest.TestCase):
+    def test_plan_rejects_unknown_tools(self):
+        with self.assertRaises(PlanValidationError):
+            validate_plan({"task": "x", "steps": [{"tool": "rm -rf"}]})
 
+    def test_plan_is_bounded(self):
+        steps = [{"tool": "workspace.info"} for _ in range(3)]
+        with self.assertRaises(PlanValidationError):
+            validate_plan({"task": "x", "steps": steps}, max_steps=2)
 
-def test_plan_is_bounded():
-    steps = [{"tool": "workspace.info"} for _ in range(3)]
-    try:
-        validate_plan({"task": "x", "steps": steps}, max_steps=2)
-    except PlanValidationError:
-        return
-    assert False, "oversized plan must be rejected"
+    def test_engine_executes_and_checkpoints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+            store = CheckpointStore(Path(tmp))
 
+            def runner(tool, payload):
+                calls.append((tool, payload))
+                return {"ok": True, "tool": tool}
 
-def test_engine_executes_and_checkpoints(tmp_path):
-    calls = []
-    store = CheckpointStore(tmp_path)
+            engine = AutonomousEngine(
+                planner=lambda _task: make_plan(),
+                tool_runner=runner,
+                checkpoints=store,
+            )
+            plan = engine.run_task("inspect")
 
-    def planner(_task):
-        return make_plan()
+            self.assertEqual(plan.status, "completed")
+            self.assertEqual(plan.steps[0].status, "completed")
+            self.assertEqual(calls, [("workspace.info", {})])
+            saved = json.loads(store.path(plan.plan_id).read_text())
+            self.assertEqual(saved["status"], "completed")
 
-    def runner(tool, payload):
-        calls.append((tool, payload))
-        return {"ok": True, "tool": tool}
+    def test_risky_step_requires_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = CheckpointStore(Path(tmp))
+            plan = make_plan("file.write")
+            engine = AutonomousEngine(
+                planner=lambda _task: plan,
+                tool_runner=lambda *_: {"ok": True},
+                checkpoints=store,
+            )
+            result = engine.run_task("write")
+            self.assertEqual(result.status, "blocked")
+            self.assertEqual(result.steps[0].status, "blocked")
 
-    engine = AutonomousEngine(planner=planner, tool_runner=runner, checkpoints=store)
-    plan = engine.run_task("inspect")
+    def test_risky_step_can_run_after_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = CheckpointStore(Path(tmp))
+            plan = make_plan("file.write")
+            calls = []
+            engine = AutonomousEngine(
+                planner=lambda _task: plan,
+                tool_runner=lambda tool, payload: calls.append((tool, payload)) or {"ok": True},
+                approval=lambda _step: True,
+                checkpoints=store,
+            )
+            result = engine.run_task("write")
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(calls[0][0], "file.write")
 
-    assert plan.status == "completed"
-    assert plan.steps[0].status == "completed"
-    assert calls == [("workspace.info", {})]
-    saved = json.loads(store.path(plan.plan_id).read_text())
-    assert saved["status"] == "completed"
-
-
-def test_risky_step_requires_approval(tmp_path):
-    store = CheckpointStore(tmp_path)
-    plan = make_plan("file.write")
-    engine = AutonomousEngine(
-        planner=lambda _task: plan,
-        tool_runner=lambda *_: {"ok": True},
-        checkpoints=store,
-    )
-    result = engine.run_task("write")
-    assert result.status == "blocked"
-    assert result.steps[0].status == "blocked"
-
-
-def test_risky_step_can_run_after_approval(tmp_path):
-    store = CheckpointStore(tmp_path)
-    plan = make_plan("file.write")
-    calls = []
-    engine = AutonomousEngine(
-        planner=lambda _task: plan,
-        tool_runner=lambda tool, payload: calls.append((tool, payload)) or {"ok": True},
-        approval=lambda _step: True,
-        checkpoints=store,
-    )
-    result = engine.run_task("write")
-    assert result.status == "completed"
-    assert calls[0][0] == "file.write"
-
-
-def test_resume_skips_completed_steps(tmp_path):
-    store = CheckpointStore(tmp_path)
-    plan = make_plan()
-    plan.steps[0].status = "completed"
-    plan.current_step = 1
-    plan.status = "running"
-    store.save(plan)
-    calls = []
-    engine = AutonomousEngine(
-        planner=lambda _task: plan,
-        tool_runner=lambda tool, payload: calls.append(tool) or {"ok": True},
-        checkpoints=store,
-    )
-    result = engine.resume(plan.plan_id)
-    assert result.status == "completed"
-    assert calls == []
+    def test_resume_skips_completed_steps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = CheckpointStore(Path(tmp))
+            plan = make_plan()
+            plan.steps[0].status = "completed"
+            plan.current_step = 1
+            plan.status = "running"
+            store.save(plan)
+            calls = []
+            engine = AutonomousEngine(
+                planner=lambda _task: plan,
+                tool_runner=lambda tool, payload: calls.append(tool) or {"ok": True},
+                checkpoints=store,
+            )
+            result = engine.resume(plan.plan_id)
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(calls, [])
