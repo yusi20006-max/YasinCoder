@@ -25,6 +25,9 @@ class GitResult:
 class GitManager:
     """Small, non-destructive Git facade rooted at a project directory."""
 
+    _FORBIDDEN_PARTS = {".git", ".env", ".venv", "venv", "__pycache__"}
+    _FORBIDDEN_SUFFIXES = {".gguf", ".safetensors", ".pyc"}
+
     def __init__(self, root: str | Path | None = None):
         self.root = Path(root or Path.cwd()).expanduser().resolve()
 
@@ -58,6 +61,12 @@ class GitManager:
     def is_dirty(self) -> bool:
         return bool(self._run("status", "--porcelain").stdout.strip())
 
+    def has_conflicts(self) -> bool:
+        for line in self._run("status", "--porcelain=v1").stdout.splitlines():
+            if len(line) >= 2 and (line[0] in "UAD" or line[1] in "UAD"):
+                return True
+        return False
+
     def current_branch(self) -> str:
         return self._run("branch", "--show-current", check=True).stdout.strip()
 
@@ -66,19 +75,34 @@ class GitManager:
         return {
             "branch": self.current_branch() if self.is_repository() else "",
             "dirty": bool(status),
+            "conflicts": self.has_conflicts(),
             "changed": len(status),
             "entries": status,
         }
 
+    def _validate_paths(self, paths: tuple[str, ...]) -> None:
+        for raw in paths:
+            path = Path(raw)
+            if path.is_absolute():
+                try:
+                    path = path.resolve().relative_to(self.root)
+                except ValueError as exc:
+                    raise GitError("refusing a path outside the project root") from exc
+            if any(part in self._FORBIDDEN_PARTS for part in path.parts) or path.suffix.lower() in self._FORBIDDEN_SUFFIXES:
+                raise GitError(f"refusing to stage protected runtime or model path: {raw}")
+
     def stage(self, *paths: str) -> GitResult:
         if not paths:
             raise ValueError("refusing to stage without explicit paths")
+        self._validate_paths(tuple(paths))
         return self._run("add", "--", *paths)
 
     def commit(self, message: str, *, paths: tuple[str, ...] = ()) -> str:
         message = str(message).strip()
         if not message:
             raise ValueError("commit message is required")
+        if self.has_conflicts():
+            raise GitDirtyWorktreeError("merge conflicts must be resolved before committing")
         if paths:
             result = self.stage(*paths)
             if not result.ok:
