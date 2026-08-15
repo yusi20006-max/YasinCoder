@@ -3,43 +3,44 @@ from __future__ import annotations
 import json, mimetypes, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Iterator
 from core.gateway_contract import chat_response, error_response, validate_chat_request
 from providers.manager import ProviderManager
 from routing import RoutingError
 from security import DEFAULT_SECURITY_POLICY, SecurityPolicy
-WEB_ROOT = Path(__file__).resolve().parent / "web"
+WEB_ROOT=Path(__file__).resolve().parent/"web"
 class GatewayError(Exception):
-    def __init__(self, code, message, status=400): super().__init__(message); self.code, self.message, self.status = code, message, status
+    def __init__(self,code,message,status=400): super().__init__(message); self.code,self.message,self.status=code,message,status
 class Gateway:
-    def __init__(self, manager=None): self.manager = manager or ProviderManager()
-    def models(self): return [{"id": m.get("name") or m.get("model"), "name": m.get("name") or m.get("model"), "provider": m.get("type", "unknown"), "capabilities": m.get("capabilities", ["chat"]), "default": m.get("default", False)} for m in self.manager.list_models()]
+    def __init__(self,manager=None): self.manager=manager or ProviderManager()
+    def models(self): return [{"id":m.get("name") or m.get("model"),"name":m.get("name") or m.get("model"),"provider":m.get("type","unknown"),"capabilities":m.get("capabilities",["chat"]),"default":m.get("default",False)} for m in self.manager.list_models()]
     def routing(self): return dict(self.manager.last_routing)
-    def _text(self, payload):
-        try: requested, messages = validate_chat_request(payload)
-        except ValueError as exc: raise GatewayError("invalid_request", str(exc)) from exc
-        text = "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
-        if not text.strip(): raise GatewayError("invalid_request", "messages contain no text content")
-        model = self.manager.models.get(requested) if requested else self.manager.models.default()
-        if requested and not model: raise GatewayError("model_not_found", f"Model '{requested}' is not configured", 404)
-        return requested, text, model
-    def chat(self, payload):
-        requested, text, model = self._text(payload)
-        try: output = self.manager.ask(text, model_name=requested)
-        except RoutingError as exc: raise GatewayError(f"provider_{exc.kind}", f"Provider routing failed: {exc.kind}", {"auth":401,"quota":429,"rate_limit":429,"timeout":503,"network":503,"server":503}.get(exc.kind, 502)) from exc
-        except Exception: raise GatewayError("provider_error", "Configured provider failed", 502)
-        return chat_response(request_id=f"yasin-{int(time.time()*1000)}", model=(model or {}).get("name") or requested or "auto", content=str(output), created=int(time.time()), routing=self.routing())
-    def stream(self, payload) -> Iterator[dict]:
-        requested, text, model = self._text(payload); model_name = (model or {}).get("name") or requested or "auto"; created = int(time.time()); request_id = f"yasin-{int(time.time()*1000)}"
+    def _text(self,payload):
+        try: requested,messages=validate_chat_request(payload)
+        except ValueError as exc: raise GatewayError("invalid_request",str(exc)) from exc
+        text="\n".join(str(m.get("content","")) for m in messages if isinstance(m,dict))
+        if not text.strip(): raise GatewayError("invalid_request","messages contain no text content")
+        model=self.manager.models.get(requested) if requested else self.manager.models.default()
+        if requested and not model: raise GatewayError("model_not_found",f"Model '{requested}' is not configured",404)
+        return requested,text,model
+    def chat(self,payload):
+        requested,text,model=self._text(payload)
+        try: output=self.manager.ask(text,model_name=requested)
+        except RoutingError as exc: raise GatewayError(f"provider_{exc.kind}",f"Provider routing failed: {exc.kind}",{"auth":401,"quota":429,"rate_limit":429,"timeout":503,"network":503,"server":503}.get(exc.kind,502)) from exc
+        except Exception: raise GatewayError("provider_error","Configured provider failed",502)
+        return chat_response(request_id=f"yasin-{int(time.time()*1000)}",model=(model or {}).get("name") or requested or "auto",content=str(output),created=int(time.time()),routing=self.routing())
+    def stream(self,payload)->Iterator[dict]:
+        requested,text,model=self._text(payload); model_name=(model or {}).get("name") or requested or "auto"; created=int(time.time()); request_id=f"yasin-{int(time.time()*1000)}"
         try:
-            for selected, chunk in self.manager.stream(text, model_name=requested):
-                yield {"id": request_id, "object": "chat.completion.chunk", "created": created, "model": selected or model_name, "choices": [{"index": 0, "delta": {"content": chunk}, "finish_reason": None}]}
-            yield {"id": request_id, "object": "chat.completion.chunk", "created": created, "model": self.manager.routing().get("selected") or model_name, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
-        except RoutingError as exc: raise GatewayError(f"provider_{exc.kind}", f"Provider routing failed: {exc.kind}", {"auth":401,"quota":429,"rate_limit":429,"timeout":503,"network":503,"server":503}.get(exc.kind, 502)) from exc
-        except Exception: raise GatewayError("provider_error", "Configured provider failed", 502)
+            for selected,chunk in self.manager.stream(text,model_name=requested):
+                yield {"id":request_id,"object":"chat.completion.chunk","created":created,"model":selected or model_name,"choices":[{"index":0,"delta":{"content":chunk},"finish_reason":None}]}
+            routing=self.manager.routing() if hasattr(self.manager,"routing") else getattr(self.manager,"last_routing",{})
+            yield {"id":request_id,"object":"chat.completion.chunk","created":created,"model":routing.get("selected") or model_name,"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+        except RoutingError as exc: raise GatewayError(f"provider_{exc.kind}",f"Provider routing failed: {exc.kind}",{"auth":401,"quota":429,"rate_limit":429,"timeout":503,"network":503,"server":503}.get(exc.kind,502)) from exc
+        except Exception: raise GatewayError("provider_error","Configured provider failed",502)
 class Handler(BaseHTTPRequestHandler):
     gateway=None; security=DEFAULT_SECURITY_POLICY; server_version="YasinCoderGateway/1.0"
-    def _send(self, status, data):
+    def _send(self,status,data):
         body=json.dumps(data,ensure_ascii=False).encode(); self.send_response(status)
         for key,value in self.security.public_headers(self.headers.get("Origin")).items(): self.send_header(key,value)
         self.send_header("Content-Type","application/json; charset=utf-8"); self.send_header("Cache-Control","no-store"); self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
