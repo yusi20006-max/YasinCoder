@@ -14,6 +14,25 @@ from commands.fix import FixCommand
 from commands.refactor import RefactorCommand
 from commands.explain import ExplainCommand
 from commands.autonomous import AutonomousCommand
+from commands.testgen import TestGenCommand
+
+
+def _testgen_args(args):
+    action = args[0] if args and not args[0].startswith("-") else "report"
+    changed_only = "--changed" in args
+    base_ref = "HEAD^"
+    timeout = 60
+    if "--base" in args:
+        index = args.index("--base")
+        if index + 1 >= len(args):
+            raise SystemExit("Usage: testgen [report|generate|run|verify] [--changed] [--base REF] [--timeout SECONDS]")
+        base_ref = args[index + 1]
+    if "--timeout" in args:
+        index = args.index("--timeout")
+        if index + 1 >= len(args):
+            raise SystemExit("Usage: testgen [report|generate|run|verify] [--changed] [--base REF] [--timeout SECONDS]")
+        timeout = float(args[index + 1])
+    return action, changed_only, base_ref, timeout
 
 
 def main():
@@ -72,6 +91,12 @@ def main():
             print("Usage: plan <coding task>")
             return
         print(AutonomousCommand().plan(" ".join(sys.argv[2:])))
+    elif cmd == "testgen":
+        try:
+            action, changed_only, base_ref, timeout = _testgen_args(sys.argv[2:])
+            print(TestGenCommand().run(action, changed_only=changed_only, base_ref=base_ref, timeout=timeout))
+        except (ValueError, IndexError) as exc:
+            raise SystemExit(str(exc))
     else:
         print("Unknown command.")
 
