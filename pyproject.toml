@@ -10,11 +10,33 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 
+[project.scripts]
+yasincoder = "main:main"
+
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
 
+[tool.setuptools]
+py-modules = [
+    "agent",
+    "ai_client",
+    "backup",
+    "coding_agent",
+    "config",
+    "doctor",
+    "gateway",
+    "git_manager",
+    "main",
+    "memory",
+    "project",
+    "router",
+    "routing",
+    "security",
+    "task_manager",
+]
+
 [tool.setuptools.packages.find]
-include = ["core*", "commands*", "providers*"]
+include = ["yasincoder*", "core*", "commands*", "providers*", "models*"]
 
 [tool.yasincoder.release]
 versioning = "semantic"
