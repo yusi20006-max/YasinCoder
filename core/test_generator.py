@@ -57,7 +57,7 @@ class TestGenerationError(ValueError):
 
 def detect_framework(root: Path) -> tuple[str, str]:
     """Detect the project language/framework without importing project code."""
-    if any(root.glob("pyproject.toml")) or any(root.glob("setup.py")) or any(root.glob("requirements*.txt")):
+    if root.joinpath("pyproject.toml").is_file() or root.joinpath("setup.py").is_file() or any(root.glob("requirements*.txt")):
         try:
             has_pytest = any("pytest" in p.read_text(encoding="utf-8").lower() for p in root.glob("requirements*.txt"))
             if has_pytest:
@@ -128,18 +128,18 @@ def _test_name(source: SourceUnit) -> str:
     return "test_" + source.module.replace(".", "_")
 
 
-def render_test(source: SourceUnit) -> str:
+def render_test(root: Path, source: SourceUnit) -> str:
     """Render source-contract tests that never invent runtime behavior."""
     expected_functions = json.dumps(list(source.functions), ensure_ascii=True)
     expected_classes = json.dumps(list(source.classes), ensure_ascii=True)
-    source_path = str(source.path).replace("\\", "\\\\")
+    relative = source.path.relative_to(root).as_posix()
     return f'''{GENERATED_MARKER}
 """Generated structural contract tests for {source.module}."""
 import ast
 from pathlib import Path
 import unittest
 
-SOURCE = Path({source_path!r})
+SOURCE = Path(__file__).parents[2] / {relative!r}
 EXPECTED_FUNCTIONS = {expected_functions}
 EXPECTED_CLASSES = {expected_classes}
 
@@ -185,7 +185,7 @@ class TestGenerator:
         self.generated_dir.mkdir(parents=True, exist_ok=True)
         for source in report.sources:
             destination = self.generated_dir / f"{_test_name(source)}.py"
-            destination.write_text(render_test(source), encoding="utf-8")
+            destination.write_text(render_test(self.root, source), encoding="utf-8")
             report.generated.append(destination)
         return report
 
@@ -206,4 +206,3 @@ class TestGenerator:
 
     def report(self, changed_only: bool = False, base_ref: str = "HEAD^") -> dict[str, object]:
         return self.plan(changed_only, base_ref).as_dict()
-'''
