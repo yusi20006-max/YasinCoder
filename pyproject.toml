@@ -27,6 +27,7 @@ py-modules = [
     "doctor",
     "gateway",
     "git_manager",
+    "github_mode",
     "main",
     "memory",
     "project",
