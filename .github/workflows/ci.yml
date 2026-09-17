@@ -20,12 +20,10 @@ jobs:
     steps:
       - name: Checkout clean clone
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Verify clean-clone invariants
         shell: bash
         run: |
@@ -42,18 +40,14 @@ jobs:
           grep -Fq '*.safetensors' .gitignore
           grep -Fq '*.bin' .gitignore
           grep -Fq 'models/' .gitignore
-
       - name: Build and install package from clean source
         run: |
           python -m pip install --upgrade pip
           python -m pip install --no-deps .
-
       - name: Compile Python sources
         run: python -m compileall -q .
-
       - name: Run deterministic test suite
         run: python -m unittest discover -s tests -p 'test_*.py' -v
-
       - name: Security and repository hygiene checks
         shell: bash
         run: |
@@ -68,8 +62,28 @@ jobs:
             echo 'Potential credential-like token found in tracked source' >&2
             exit 1
           fi
-
       - name: Build wheel artifact
         run: |
           python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
           test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+
+  worker:
+    name: Cloudflare Worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Worker JavaScript
+        run: node --check worker/src/index.js
+      - name: Verify Worker deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f worker/wrangler.toml
+          test -f worker/src/index.js
+          grep -Fq 'YASIN_WORKER_API_KEY' worker/src/index.js
+          grep -Fq 'YASIN_UPSTREAM_URL' worker/src/index.js
+          grep -Fq 'YASIN_MAX_BODY_BYTES' worker/src/index.js
+          grep -Fq 'YASIN_RATE_LIMIT_PER_MINUTE' worker/src/index.js
