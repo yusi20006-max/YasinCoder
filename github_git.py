@@ -48,7 +48,9 @@ class GitPublisher:
             self._run("add", "--", *paths)
         else:
             self._run("add", "-A")
-        self._run("diff", "--cached", "--quiet")
+        staged = self._run("diff", "--cached", "--name-only")
+        if not staged:
+            raise GitSafetyError("no staged changes to commit")
         self._run("commit", "-m", message.strip())
         return self._run("rev-parse", "HEAD")
 
