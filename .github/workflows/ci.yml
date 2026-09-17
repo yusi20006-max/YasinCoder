@@ -62,6 +62,10 @@ jobs:
             echo 'Potential credential-like token found in tracked source' >&2
             exit 1
           fi
+      - name: Dependency vulnerability audit
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit --strict
       - name: Build wheel artifact
         run: |
           python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
