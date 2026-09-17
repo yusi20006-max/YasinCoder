@@ -16,6 +16,46 @@ GIT_COMMANDS = {"git"}
 SHELL_CONTROL_TOKENS = {";", "&&", "||", "|", ">", ">>", "<", "2>", "2>>", "&"}
 
 
+def _has_unquoted_operator(command: str) -> bool:
+    """Detect shell control operators outside single/double quotes.
+
+    A naive substring check would reject quoted metacharacters such as the
+    ``;`` in ``python -c 'import time; time.sleep(5)'``. Only operators in
+    unquoted shell syntax are dangerous; quoted text is passed to the
+    executable as literal argv.
+    """
+    multi = ("2>>", "&&", "||", ">>", "2>")
+    single = (";", "|", ">", "<", "&")
+    in_single = in_double = escaped = False
+    i, n = 0, len(command)
+    while i < n:
+        ch = command[i]
+        if escaped:
+            escaped = False
+            i += 1
+            continue
+        if ch == "\\" and not in_single:
+            escaped = True
+            i += 1
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            i += 1
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            i += 1
+            continue
+        if not in_single and not in_double:
+            for op in multi:
+                if command.startswith(op, i):
+                    return True
+            if ch in single:
+                return True
+        i += 1
+    return False
+
+
 def _policy(payload: dict[str, Any]) -> PermissionPolicy:
     value = payload.get("permissions")
     if isinstance(value, PermissionPolicy):
@@ -104,7 +144,7 @@ def _shell(payload: dict[str, Any], root: Path, tool_name: str = "shell.exec") -
     command = str(payload.get("command", "")).strip()
     if not command:
         return _result({"ok": False, "tool": tool_name, "error": "empty command", "audit": _audit(tool_name, "execute", False)})
-    if any(token in command for token in SHELL_CONTROL_TOKENS):
+    if _has_unquoted_operator(command):
         return _result({"ok": False, "tool": tool_name, "error": "shell control operators are rejected; pass argv without shell syntax", "audit": _audit(tool_name, "execute", False)})
     try:
         argv = shlex.split(command)

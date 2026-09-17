@@ -11,11 +11,11 @@ from security import SecurityPolicy, credential_from_env
 
 class SecurityHardeningTests(unittest.TestCase):
     def test_redaction_covers_known_token_shapes_and_sensitive_keys(self):
-        text = "Authorization: Bearer super-secret-token-value-12345 sk-abcdefghijklmnop1234"
+        text = "Authorization: Bearer super-secret-1234 sk-abcdefghijklmnop12"
         result = redact({"token": "top-secret-value", "message": text})
         self.assertEqual(result["token"], "[REDACTED]")
-        self.assertNotIn("super-secret-token-value-12345", result["message"])
-        self.assertNotIn("sk-abcdefghijklmnop1234", result["message"])
+        self.assertNotIn("super-secret-1234", result["message"])
+        self.assertNotIn("sk-abcdefghijklmnop12", result["message"])
 
     def test_credential_precedence_is_explicit(self):
         old = {name: os.environ.get(name) for name in ("YASIN_API_KEY", "YASIN_GATEWAY_API_KEY")}

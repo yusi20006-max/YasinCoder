@@ -55,10 +55,10 @@ class SecurityPolicy:
             headers["Vary"] = "Origin"
         return headers
 
-    @staticmethod
-    def safe_error(message: object) -> str:
+    def safe_error(self, message: object) -> str:
         """Return an error string with credentials and token-like data redacted."""
-        return str(redact(str(message)))
+        secrets = (self.api_key,) if self.api_key else None
+        return str(redact(str(message), secrets=secrets))
 
 
 DEFAULT_SECURITY_POLICY = SecurityPolicy.from_env()

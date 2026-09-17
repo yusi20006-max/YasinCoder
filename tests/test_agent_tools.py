@@ -65,4 +65,4 @@ def test_git_requires_git_permission(tmp_path):
 
 def test_unknown_tool_is_structured():
     result = execute("missing.tool")
-    assert result == {"ok": False, "tool": "missing.tool", "error": "unknown tool"}
+    assert result == {"ok": False, "tool": "missing.tool", "error": "unknown tool", "audit": {"tool": "missing.tool", "capability": "none", "ok": False}}
