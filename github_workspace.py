@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from github_mode import GitHubClient, GitHubPermissionError
 
 
-_BRANCH_RE = re.compile(r"[^A-Za-z0-9._/-]+")
+_BRANCH_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def issue_branch_name(number: int, title: str) -> str:
