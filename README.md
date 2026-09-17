@@ -1,84 +1,116 @@
 # YasinCoder
 
-AI coding agent with a portable, provider-agnostic architecture.
+Portable, provider-agnostic AI coding agent for local and online models.
 
-## Current status
+## Status
 
-YasinCoder is being rebuilt as a clean-clone project: runtime state, credentials, caches, logs, and local model files stay outside Git.
+The repository is clean-clone oriented: credentials, runtime state, caches, logs, and model weights are user-owned and stay outside Git. The Python package, gateway, coding tools, security boundaries, CI gates, and optional Cloudflare Worker are implemented.
 
-## Installation
+## Install from a clean clone
 
-YasinCoder is a normal Python distribution and can be installed from a clean clone:
+Linux/macOS/Termux:
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install .
-```
-
-For development/editable installs:
-
-```bash
-python -m pip install -e .
-```
-
-After installation, both the public package and CLI are available outside the repository directory:
-
-```bash
-python -c "import yasincoder; print(yasincoder.__version__)"
+yasincoder doctor
 yasincoder info
 ```
 
-On Windows, activate the virtual environment with `.venv\\Scripts\\activate` instead of `. .venv/bin/activate`.
+Windows PowerShell:
 
-## Supported deployment modes
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install .
+yasincoder doctor
+yasincoder info
+```
 
-At first run, users will choose:
+For development, use `python -m pip install -e .`.
 
-1. **Offline / local AI** — connect YasinCoder to their own local runtime/model (for example llama.cpp or Ollama). No model is bundled in this repository.
-2. **Online AI** — choose a configured provider/model such as Gemini or another OpenAI-compatible/custom provider and supply the required API credentials.
+## First provider-backed chat
 
-The exact provider/model configuration is intentionally user-owned and portable.
+YasinCoder keeps provider credentials out of source control. For an OpenAI-compatible endpoint, configure the endpoint and model through environment variables, then run the normal CLI:
 
-## Architecture
+```bash
+export YASIN_BASE_URL="https://provider.example/v1"
+export YASIN_MODEL_NAME="your-model"
+export YASIN_API_KEY="your-api-key"
+yasincoder doctor
+yasincoder models
+yasincoder chat "Hello from YasinCoder"
+```
 
-- `core/` — project intelligence and reusable domain services
-- `commands/` — user-facing coding operations
-- `providers/` — AI provider adapters
-- `config.py` — compatibility configuration layer; user/runtime values should come from environment or external config
-- `docs/` — architecture, configuration, gateway and operational documentation
+The same configuration contract supports `openai_compatible`, `openai`, `custom`, `ollama`, `llama_cpp`, and `cloudflare` provider types. Local models are never bundled. See `docs/CONFIGURATION.md` for the external model registry and provider-specific environment references.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) and [`docs/GATEWAY.md`](docs/GATEWAY.md).
+## CLI
 
-## Repository rules
+Common commands:
 
-- Never commit GGUF/model binaries.
-- Never commit API keys, tokens, local runtime state, logs or caches.
-- Never depend on the developer's absolute filesystem paths.
-- A clean clone must be configurable for a different local model without source edits.
+```text
+help                    Show commands
+info                    Show runtime/package information
+doctor                  Validate environment and model registry
+models                  List configured models without printing credentials
+project                 Inspect the current project
+search <keyword>        Search project files
+read <file>             Read a project file
+chat <message>          Send a chat request
+review <file>           Review a file
+fix <file>              Ask the agent to fix a file
+refactor <file>         Refactor a file
+explain <file> [q]      Explain a file
+autonomous <task>       Run an autonomous coding task
+plan <task>             Produce an autonomous plan
+testgen [action]        Report/generate/run/verify tests
+```
+
+## Gateway
+
+The local gateway binds to `127.0.0.1` by default and exposes OpenAI-compatible health, model, routing, chat, and streaming routes. Protected routes use the configured API key and origin policy. Request bodies and subprocess output are bounded; tool execution rejects shell control operators and enforces workspace confinement.
+
+See `docs/GATEWAY.md` for the contract and `docs/SECURITY.md` for security boundaries.
+
+## Cloudflare Worker
+
+An optional remote gateway is provided under `worker/`. It supports the same health, models, and chat routes, forwards streaming responses to a configured OpenAI-compatible upstream, and keeps client/upstream credentials server-side.
+
+See `worker/README.md` for Wrangler deployment and secret configuration.
+
+## Supported platforms
+
+The Python project declares Python `>=3.10`. CI verifies Python 3.10–3.13 on Linux. The code is designed to remain portable across Linux/macOS/Windows and Termux where the selected Python runtime and provider are available. Local model runtimes such as Ollama or llama.cpp are external dependencies.
+
+## Security rules
+
+- Never commit API keys, tokens, passwords, certificates, model weights, runtime state, logs, or caches.
+- Never put credentials directly into the model registry; reference environment variables instead.
+- Keep autonomous execution inside an approved workspace.
+- Use explicit permissions for writes, command execution, network, Git, and admin operations.
+- Do not expose an unauthenticated local provider directly to a network.
 
 ## Verification
-
-From a fresh clone:
 
 ```bash
 python -m compileall -q .
 python -m unittest discover -s tests -p 'test_*.py' -v
+python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
 ```
 
-To verify the distribution boundary itself:
+CI additionally validates repository hygiene, package installation, the Python matrix, wheel creation, and Cloudflare Worker syntax/contract invariants.
 
-```bash
-python -m pip install .
-python -c "import yasincoder"
-yasincoder info
-```
+## Project documentation
 
-The deterministic suite includes gateway contract/security tests, packaging smoke coverage, and clean-clone invariants for model portability and developer-path isolation.
+- `docs/ARCHITECTURE.md` — component boundaries and design
+- `docs/CONFIGURATION.md` — model registry and environment configuration
+- `docs/GATEWAY.md` — local gateway API
+- `docs/SECURITY.md` — execution and secret-handling rules
+- `docs/RELEASE.md` — versioning and release policy
+- `docs/TROUBLESHOOTING.md` — common setup/runtime failures
+- `worker/README.md` — Cloudflare Worker deployment
 
-## Roadmap
-
-Execution is tracked exclusively through GitHub Issues. Phase work should be implemented against the corresponding issue and verified before that issue is closed.
-
-See the master roadmap issue in this repository for the complete phase map.
+Roadmap state is tracked by GitHub Issues; completed features should not remain duplicated as TODO items.
