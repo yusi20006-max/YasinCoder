@@ -1,61 +1,37 @@
 # YasinCoder Current Status
 
-Audit date: **2026-08-14**
+Audit date: **2026-09-17**
 
 ## Overall
 
-**Phase 12 testing and verification is complete. Phase 13 documentation synchronization is in progress.**
+Core provider/gateway/agent functionality, security hardening, CI/release gates, and the Cloudflare Worker gateway are implemented. Documentation is synchronized with the current CLI and deployment model. The first published release is still a separate release-engineering step.
 
-## Verified
+## Verified by repository/CI contracts
 
-- Python syntax passes.
-- Required web/runtime files exist.
-- Gateway starts and reports `SYSTEM_READY`.
-- Web UI returns HTTP 200.
-- Qwen health returns `{"status":"ok"}`.
-- A user-selected local Qwen model can be registered and served through llama.cpp.
-- `/api/qwen` returns a successful generated response (`QWEN_OK`).
-- `/api/status` reports gateway, Qwen and Gemini availability.
-- `/api/logs` returns structured JSON logs.
-- `/api/start` returns success.
-- `/api/restart` successfully stops and starts Qwen.
-- Final process checks show one Python gateway and one llama-server process.
-- Termux ripgrep 15.2.0 is installed.
-- Deterministic CI/testing work from Phase 12 is merged.
+- Python 3.10–3.13 matrix is configured in CI.
+- Clean-clone package installation is part of CI.
+- Python compilation and deterministic unittest discovery are CI gates.
+- Repository hygiene checks reject tracked secret/model artifact patterns.
+- Wheel creation is a CI gate.
+- Coding-agent file paths are workspace-confined with traversal/symlink protection.
+- Side-effectful tool capabilities are permission-gated.
+- Shell control operators are rejected.
+- Subprocess timeouts and output-size limits are enforced.
+- Gateway responses and tool results use centralized redaction.
+- Cloudflare Worker JavaScript is syntax-checked in CI and its deployment contract is checked.
 
-## AI provider status
+## Provider status
 
-### Local/offline
+The repository supports provider-neutral configuration for OpenAI-compatible/custom endpoints and local runtimes such as Ollama and llama.cpp, plus Cloudflare provider support. Live provider success depends on the user's endpoint, model, credentials, network, quota, and runtime availability; those environment-specific conditions are not release artifacts.
 
-Local AI is provider/model-agnostic by design. The repository does **not** bundle a GGUF model and must not depend on the developer's Qwen model, filesystem path, port, or runtime state. Users configure their own llama.cpp, Ollama, or compatible local endpoint.
+## Security status
 
-### Gemini / online
+The local gateway remains loopback-first. Remote deployments should use an authenticated network boundary. The optional Cloudflare Worker separates client authentication from the upstream credential and applies origin, request-size, and best-effort per-IP rate limits.
 
-Gemini CLI exists and is discoverable by the gateway. Generation was not successful during the audit because the configured `gemini-3.5-flash` account had exhausted its daily free-tier quota. The CLI returned HTTP 429 / `TerminalQuotaError`.
+## Release status
 
-This is an environment/provider-account condition, not evidence that the gateway route is missing. Online providers must therefore be documented as credential- and quota-dependent.
-
-## Performance observations
-
-Observed local Qwen tests were approximately:
-
-- prompt processing: 11–12 tokens/sec;
-- generation: roughly 3–7 tokens/sec in the recorded tests;
-- model load: roughly 3–4 seconds in recorded restarts.
-
-These are development observations, not formal benchmarks.
-
-## Current known limitations
-
-1. Successful Gemini generation requires a quota-available account/model for live provider validation.
-2. Provider-specific CLI environment behavior may vary across installations.
-3. Duplicate route branches observed during the development audit remain technical cleanup candidates.
-4. Local gateway security must be hardened before remote exposure.
+`VERSION` and release metadata are repository-controlled, while an actual Git tag/GitHub Release requires a final clean-clone/provider-backed verification and release publication step.
 
 ## Portability invariant
 
-A clean clone must work without access to the developer's machine, credentials, local model, absolute paths, runtime state, or Termux backups. Runtime/model data belongs outside Git.
-
-## Backup references
-
-Historical local Termux backup paths are retained as implementation evidence only and are not repository dependencies.
+A clean clone must work without access to a developer's machine, credentials, local model, absolute paths, runtime state, or Termux backups. Runtime/model data belongs outside Git.

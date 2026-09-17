@@ -2,37 +2,41 @@
 
 ## Trust boundaries
 
-- The gateway is bound to `127.0.0.1` by default.
+- The local gateway binds to `127.0.0.1` by default.
 - Provider credentials and model definitions live outside Git.
-- Local model weights are ignored by Git and are user-owned runtime data.
-- The coding-agent layer must treat model output as untrusted input.
+- Local model weights are user-owned runtime data and must not enter Git.
+- Model/provider output is untrusted input and must never become shell syntax implicitly.
+
+## Credentials and redaction
+
+Credentials are supplied through environment variables or external runtime configuration. Sensitive mapping keys and common API-key/token formats are centrally redacted from tool and gateway responses. Error messages are normalized rather than exposing provider exception details.
+
+The gateway accepts `YASIN_API_KEY` first and `YASIN_GATEWAY_API_KEY` only as a compatibility fallback. Do not put either value in source control.
+
+## Workspace and file policy
+
+File paths are resolved beneath the configured workspace. `..` traversal and symlink escapes outside that workspace are rejected. Subprocesses require an existing resolved working directory.
+
+## Command execution
+
+Writes, execution, network, Git, and admin operations are permission-gated. Shell control operators (`;`, `&&`, `||`, pipes and redirections) are rejected. Subprocesses have bounded timeouts and output size, and timeout cleanup targets the whole process group.
 
 ## Gateway policy
 
-- No CORS origins are allowed unless `YASIN_ALLOWED_ORIGINS` is explicitly set.
-- `YASIN_API_KEY` enables Bearer-token authentication for all gateway routes.
-- Request bodies are capped by `YASIN_MAX_BODY_BYTES` (1 MiB by default).
-- JSON requests must be objects and model identifiers are length-limited.
-- Static file paths are resolved and constrained beneath the web root.
-- Security headers are emitted on gateway responses.
+- Protected routes use Bearer-token authentication when `YASIN_API_KEY` is configured.
+- Origins are constrained by `YASIN_ALLOWED_ORIGINS` when configured.
+- Request bodies are capped by `YASIN_MAX_BODY_BYTES`.
+- Static paths are constrained beneath the web root.
+- Security headers are emitted on responses.
 
-## Remote exposure
+## Cloudflare Worker
 
-Do not bind the gateway to a public interface without authentication and an explicit origin policy. A reverse proxy, TLS termination, firewall, and network access control should be used for production remote deployments.
+The Worker uses `YASIN_WORKER_API_KEY` for client authentication and `YASIN_UPSTREAM_API_KEY` only for the configured upstream. These are Cloudflare secrets, never client-visible. The Worker also applies origin, request-size, and best-effort per-IP rate limits.
 
-## Secrets
+## Rules
 
-Never commit API keys, provider tokens, model credentials, local model weights, runtime state, or logs. Use environment variables or an external runtime configuration file.
-
-## Threats addressed in Phase 11
-
-- Cross-origin browser abuse
-- Unauthenticated remote API access
-- Oversized request bodies
-- Malformed JSON and oversized model identifiers
-- Static path traversal
-- Accidental secret/model artifact commits
-
-## Remaining agent-execution boundary
-
-Future sandboxed execution must use explicit workspace allowlists, command allowlists/deny-lists, timeouts, resource limits, and user approval for privileged operations. Provider output must never be treated as a trusted shell command by default.
+1. Never commit API keys, tokens, passwords, certificates, model weights, runtime state, logs, or caches.
+2. Never place credential values in the model registry; reference environment variable names.
+3. Keep autonomous execution inside an approved workspace.
+4. Treat provider responses as untrusted data.
+5. Fail closed on malformed commands, path escapes, permission failures, and resource-limit violations.
