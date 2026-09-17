@@ -69,3 +69,37 @@ class GitHubWorkflow:
         state.merged, state.phase = True, "merged"
         state.history.append("merged")
         return result
+
+    def audit_e2e_readiness(self) -> dict:
+        """Safely audit the current environment readiness for live E2E GitHub execution."""
+        has_token = bool(self.client.config.token)
+        repo_full = self.client.config.repo_full_name
+        capabilities = self.client.permissions_snapshot()
+        remote_info = {}
+        try:
+            remote_info = self.publisher.preflight()
+        except Exception as exc:
+            remote_info = {"error": str(exc)}
+
+        if not has_token:
+            status = "NOT TESTED"
+            rationale = "Live GitHub E2E execution skipped: GITHUB_TOKEN is not configured in environment."
+        elif not repo_full:
+            status = "FAIL"
+            rationale = "GitHub repository identity (owner/repo) is not configured."
+        elif not all(capabilities.values()):
+            status = "PASS WITH LIMITATIONS"
+            missing = [k for k, v in capabilities.items() if not v]
+            rationale = f"Live GitHub token present, but missing capabilities: {', '.join(missing)}"
+        else:
+            status = "PASS"
+            rationale = "Full GitHub E2E capabilities are configured and ready."
+
+        return {
+            "status": status,
+            "rationale": rationale,
+            "has_token": has_token,
+            "repo_full_name": repo_full,
+            "capabilities": capabilities,
+            "remote": remote_info,
+        }

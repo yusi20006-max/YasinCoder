@@ -24,6 +24,30 @@ class TuiUnitTests(unittest.TestCase):
         with patch.dict(os.environ, {"NO_COLOR": "1"}):
             self.assertFalse(tui._supports_ansi())
 
+    def test_clip_handles_negative_or_zero_width(self):
+        self.assertEqual(tui._clip("hello", 0), "")
+        self.assertEqual(tui._clip("hello", -5), "")
+        self.assertEqual(tui._clip("hello", 1), "h")
+
+    def test_all_screens_render_without_error(self):
+        app = tui.YasinCoderTUI()
+        app.ansi = False
+        app.dashboard()
+        app.projects()
+        app.sessions()
+        app.models()
+        app.git()
+        app.system()
+        app.settings()
+
+    def test_tui_interactive_loop_commands(self):
+        app = tui.YasinCoderTUI()
+        inputs = iter(["1", "3", "5", "6", "8", "9", "m", "r", "n", "invalid", "q"])
+        with patch("builtins.input", lambda prompt="": next(inputs)), patch("sys.stdin.isatty", return_value=True), patch("sys.stdout.isatty", return_value=True):
+            res = app.run()
+            self.assertEqual(res, 0)
+            self.assertFalse(app.ansi)
+
 
 if __name__ == "__main__":
     unittest.main()

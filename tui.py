@@ -41,8 +41,10 @@ def _paint(text: str, code: str, enabled: bool) -> str:
 
 def _clip(text: str, width: int) -> str:
     text = str(text).replace("\t", " ").replace("\r", "")
-    if width <= 1:
-        return text[:width]
+    if width <= 0:
+        return ""
+    if width == 1:
+        return text[:1]
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
@@ -87,8 +89,11 @@ class YasinCoderTUI:
             info = project_info()
             git = GitManager(self.project).change_summary()
             model = ModelManager().default()
-            import importlib.metadata as metadata
-            version = metadata.version("yasincoder")
+            try:
+                import importlib.metadata as metadata
+                version = metadata.version("yasincoder")
+            except Exception:
+                version = "source checkout"
         except Exception as exc:
             print(_paint(f"Unable to read dashboard state: {exc}", RED, self.ansi))
             self.footer(); return
@@ -107,7 +112,7 @@ class YasinCoderTUI:
             ("Files", info["count"]),
         ]
         for key, value in rows:
-            print(f"  {_paint(key + ':', BOLD, self.ansi):<18} {_clip(str(value), self.width - 22)}")
+            print(f"  {_paint(key + ':', BOLD, self.ansi):<18} {_clip(str(value), max(5, self.width - 22))}")
         print()
         print(_paint("What would you like to do?", BOLD, self.ansi))
         print("  1  Start a coding task")
@@ -172,7 +177,7 @@ class YasinCoderTUI:
                 active = default and item.get("name") == default.get("name")
                 marker = "●" if active else "○"
                 state = "active" if active else "configured"
-                print(f" {marker} {_clip(str(item.get('name')), self.width - 30)}  {item.get('type', '')}  {state}")
+                print(f" {marker} {_clip(str(item.get('name')), max(5, self.width - 30))}  {item.get('type', '')}  {state}")
         except Exception as exc:
             print(_paint(f"Model registry error: {exc}", RED, self.ansi))
         self.footer()
@@ -190,10 +195,10 @@ class YasinCoderTUI:
             print(_paint("Conflicts detected. No destructive action is offered by the TUI.", RED, self.ansi))
         print(f"Changed files: {summary['changed']}")
         for entry in summary["entries"][: self.height - 11]:
-            print("  " + _clip(entry, self.width - 4))
+            print("  " + _clip(entry, max(5, self.width - 4)))
         print("\nRecent commits:")
         for line in manager.log(5).splitlines():
-            print("  " + _clip(line, self.width - 4))
+            print("  " + _clip(line, max(5, self.width - 4)))
         self.footer()
 
     def tests(self) -> None:
@@ -264,9 +269,22 @@ class YasinCoderTUI:
                 break
             if choice == "m":
                 self.mode = "advanced" if self.mode == "simple" else "simple"
+                _clear(self.ansi)
+                self.dashboard()
+                continue
+            if choice == "r":
+                self.refresh_size()
+                _clear(self.ansi)
+                self.dashboard()
+                continue
+            if choice == "n":
+                self.ansi = False
+                _clear(self.ansi)
                 self.dashboard()
                 continue
             screen = screens.get(choice)
+            if choice in {"1", "2", "3", "4", "5", "6", "7", "8", "9"}:
+                _clear(self.ansi)
             if screen:
                 _clear(self.ansi)
                 screen()
