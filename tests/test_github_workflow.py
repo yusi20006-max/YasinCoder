@@ -40,5 +40,18 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(GitHubPermissionError): workflow.merge(state, approved=True)
 
 
+    def test_open_pr_requires_recorded_commit(self):
+        _, workflow = self.make()
+        state = workflow.start(1)
+        with self.assertRaises(RuntimeError): workflow.open_pr(state, "title")
+
+    def test_verify_ci_requires_pr_and_commit(self):
+        _, workflow = self.make()
+        state = workflow.start(1)
+        with self.assertRaises(RuntimeError): workflow.verify_ci(state)
+        state.pr = 9
+        with self.assertRaises(RuntimeError): workflow.verify_ci(state)
+
+
 if __name__ == "__main__":
     unittest.main()
