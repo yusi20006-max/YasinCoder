@@ -10,6 +10,8 @@ info
 
 models
 
+setup gemini        Configure Gemini API key and set Gemini as the default AI
+
 project
 
 brain
