@@ -36,7 +36,7 @@ class ModelValidationError(ValueError):
 
 
 class ModelManager:
-    """User-owned registry. Secrets are referenced by environment variable only."""
+    """User-owned registry. Secrets are referenced by environment variable or file only."""
 
     def __init__(self, path: str | Path | None = None):
         self.path = Path(path).expanduser() if path else _path()
@@ -69,7 +69,7 @@ class ModelManager:
             raise ModelValidationError(f"unsupported provider type: {kind or '<empty>'}")
         for key in SECRET_KEYS:
             if key in model and model[key]:
-                raise ModelValidationError(f"secret value '{key}' must not be stored; use an *_ENV reference")
+                raise ModelValidationError(f"secret value '{key}' must not be stored; use an *_ENV or *_FILE reference")
         aliases = model.get("aliases", [])
         if isinstance(aliases, str):
             aliases = [aliases]
@@ -95,6 +95,8 @@ class ModelManager:
         for key, value in model.items():
             if key.endswith("_env") and value and (not isinstance(value, str) or not value.strip()):
                 raise ModelValidationError(f"{key} must name an environment variable")
+            if key.endswith("_file") and value and (not isinstance(value, str) or not value.strip()):
+                raise ModelValidationError(f"{key} must name a credential file")
         return model
 
     def save(self) -> None:
@@ -162,13 +164,23 @@ class ModelManager:
 
     @staticmethod
     def resolve_secrets(model: dict[str, Any]) -> dict[str, Any]:
-        """Return a runtime copy with environment-backed credentials resolved."""
+        """Return a runtime copy with environment/file-backed credentials resolved."""
         resolved = dict(model)
         for key, env_name in list(model.items()):
             if not key.endswith("_env") or not env_name:
                 continue
             target = key[:-4]
             value = os.getenv(str(env_name), "")
+            if value:
+                resolved[target] = value
+        for key, file_name in list(model.items()):
+            if not key.endswith("_file") or not file_name:
+                continue
+            target = key[:-5]
+            try:
+                value = Path(str(file_name)).expanduser().read_text(encoding="utf-8").strip()
+            except OSError:
+                value = ""
             if value:
                 resolved[target] = value
         return resolved
