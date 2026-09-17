@@ -105,14 +105,13 @@ def setup_gemini(api_key: str, manager: ModelManager | None = None) -> dict[str,
     models = discover_models(api_key)
     selected = choose_model(models)
     credential = save_credential(api_key)
-    credential_env = "YASIN_GEMINI_CREDENTIAL_FILE"
     model = {
         "name": "gemini",
         "type": "gemini",
         "base_url": GEMINI_BASE_URL,
         "model": selected,
         "aliases": ["google", "gemini-default"],
-        "api_key_file_env": credential_env,
+        "api_key_file": str(credential),
         "timeout": 120,
         "temperature": 0.2,
         "max_tokens": 4096,
