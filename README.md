@@ -4,7 +4,7 @@ Portable, provider-agnostic AI coding agent for local and online models.
 
 ## Status
 
-The repository is clean-clone oriented: credentials, runtime state, caches, logs, and model weights are user-owned and stay outside Git. The Python package, gateway, coding tools, security boundaries, CI gates, and optional Cloudflare Worker are implemented.
+The repository is clean-clone oriented: credentials, runtime state, caches, logs, and model weights are user-owned and stay outside Git. The Python package, gateway, coding tools, security boundaries, CI gates, optional Cloudflare Worker, and a dependency-free Terminal UI are implemented.
 
 ## Install from a clean clone
 
@@ -31,6 +31,33 @@ yasincoder info
 ```
 
 For development, use `python -m pip install -e .`.
+
+## Terminal UI for Termux
+
+YasinCoder includes a lightweight interactive terminal dashboard designed for native Termux/Android and normal terminals. It uses only the Python standard library, so no rich UI dependency is required.
+
+Launch it with:
+
+```bash
+yasincoder tui
+# or
+yasincoder-tui
+```
+
+The dashboard reads live information from the existing project, Git and model interfaces. It does not fabricate task, test, provider, or Git state.
+
+Navigation:
+
+```text
+1 Dashboard       2 New Task        3 Projects
+4 Sessions        5 Providers       6 Git / Changes
+7 Tests           8 System Status   9 Settings
+q Quit
+```
+
+The UI is intentionally keyboard-first and remains useful on narrow phone-sized terminals. ANSI rendering is automatically disabled for `NO_COLOR`, redirected output, dumb terminals, or other non-interactive contexts. Simple and advanced concepts share the same underlying state; the current interface keeps the safe simple flow visible while exposing technical state in dedicated screens.
+
+For detailed usage, see `docs/TUI.md`.
 
 ## First-run Gemini setup
 
@@ -67,6 +94,7 @@ Common commands:
 help                    Show commands
 info                    Show runtime/package information
 doctor                  Validate environment and model registry
+tui                     Launch the interactive Terminal UI
 setup gemini            Configure Gemini API key and set Gemini as the default AI
 models                  List configured models without printing credentials
 project                 Inspect the current project
@@ -105,6 +133,7 @@ The Python project declares Python `>=3.10`. CI verifies Python 3.10–3.13 on L
 - Keep autonomous execution inside an approved workspace.
 - Use explicit permissions for writes, command execution, network, Git, and admin operations.
 - Do not expose an unauthenticated local provider directly to a network.
+- The TUI must never display secret values.
 
 ## Verification
 
@@ -120,6 +149,7 @@ CI additionally validates repository hygiene, package installation, the Python m
 
 - `docs/ARCHITECTURE.md` — component boundaries and design
 - `docs/CONFIGURATION.md` — model registry, Gemini setup, and environment configuration
+- `docs/TUI.md` — Terminal UI usage and Termux behavior
 - `docs/GATEWAY.md` — local gateway API
 - `docs/SECURITY.md` — execution and secret-handling rules
 - `docs/RELEASE.md` — versioning and release policy

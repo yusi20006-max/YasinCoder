@@ -52,6 +52,9 @@ def main():
     elif cmd == "doctor":
         from doctor import run as doctor_run
         raise SystemExit(doctor_run())
+    elif cmd == "tui":
+        from tui import run as tui_run
+        raise SystemExit(tui_run())
     elif cmd == "setup":
         provider = sys.argv[2] if len(sys.argv) > 2 else "gemini"
         SetupCommand().run(provider)

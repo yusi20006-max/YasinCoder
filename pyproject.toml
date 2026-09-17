@@ -12,6 +12,7 @@ license = { file = "LICENSE" }
 
 [project.scripts]
 yasincoder = "main:main"
+yasincoder-tui = "tui:run"
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
@@ -33,6 +34,7 @@ py-modules = [
     "routing",
     "security",
     "task_manager",
+    "tui",
 ]
 
 [tool.setuptools.packages.find]
