@@ -32,6 +32,18 @@ yasincoder info
 
 For development, use `python -m pip install -e .`.
 
+## First-run Gemini setup
+
+If you want Gemini as the default online AI, you do not need to manually configure an endpoint or model. Run:
+
+```bash
+yasincoder setup gemini
+```
+
+YasinCoder securely prompts for the Gemini API key, validates it, discovers compatible Gemini models, selects a supported model, and saves Gemini as the default provider. The API key is stored in a user-only credential file outside the repository and is never printed or placed in the model registry.
+
+Google documents Gemini's OpenAI-compatible endpoint at `https://generativelanguage.googleapis.com/v1beta/openai/`, including model listing and streaming.
+
 ## First provider-backed chat
 
 YasinCoder keeps provider credentials out of source control. For an OpenAI-compatible endpoint, configure the endpoint and model through environment variables, then run the normal CLI:
@@ -45,7 +57,7 @@ yasincoder models
 yasincoder chat "Hello from YasinCoder"
 ```
 
-The same configuration contract supports `openai_compatible`, `openai`, `custom`, `ollama`, `llama_cpp`, and `cloudflare` provider types. Local models are never bundled. See `docs/CONFIGURATION.md` for the external model registry and provider-specific environment references.
+The same configuration contract supports `openai_compatible`, `openai`, `custom`, `ollama`, `llama_cpp`, `cloudflare`, and `gemini` provider types. Local models are never bundled. See `docs/CONFIGURATION.md` for the external model registry and provider-specific environment references.
 
 ## CLI
 
@@ -55,6 +67,7 @@ Common commands:
 help                    Show commands
 info                    Show runtime/package information
 doctor                  Validate environment and model registry
+setup gemini            Configure Gemini API key and set Gemini as the default AI
 models                  List configured models without printing credentials
 project                 Inspect the current project
 search <keyword>        Search project files
@@ -88,7 +101,7 @@ The Python project declares Python `>=3.10`. CI verifies Python 3.10–3.13 on L
 ## Security rules
 
 - Never commit API keys, tokens, passwords, certificates, model weights, runtime state, logs, or caches.
-- Never put credentials directly into the model registry; reference environment variables instead.
+- Never put credentials directly into the model registry; reference environment variables or the user-only Gemini credential file instead.
 - Keep autonomous execution inside an approved workspace.
 - Use explicit permissions for writes, command execution, network, Git, and admin operations.
 - Do not expose an unauthenticated local provider directly to a network.
@@ -106,7 +119,7 @@ CI additionally validates repository hygiene, package installation, the Python m
 ## Project documentation
 
 - `docs/ARCHITECTURE.md` — component boundaries and design
-- `docs/CONFIGURATION.md` — model registry and environment configuration
+- `docs/CONFIGURATION.md` — model registry, Gemini setup, and environment configuration
 - `docs/GATEWAY.md` — local gateway API
 - `docs/SECURITY.md` — execution and secret-handling rules
 - `docs/RELEASE.md` — versioning and release policy
