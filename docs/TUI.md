@@ -35,6 +35,8 @@ The dashboard also provides the main entry point for starting a coding task.
 
 The TUI reuses existing YasinCoder interfaces for project information, Git status and model configuration. It deliberately does not manufacture progress counts, provider health, test totals, or Git state. If a subsystem does not currently expose persistent session information, the Sessions screen says so instead of inventing records.
 
+The New Task screen delegates execution to the existing autonomous command. It does not create a second agent implementation. The task result and failure are shown after the existing command completes.
+
 ## Termux behavior
 
 The implementation has no third-party UI dependency. This keeps installation and startup small for native ARM64 Termux. The terminal size is read on each screen, content is clipped to the available width, and the interface uses a minimum layout suitable for narrow displays. ANSI color is disabled automatically for redirected output, dumb terminals, or `NO_COLOR`.
@@ -46,6 +48,10 @@ The dashboard is intentionally simple for a user who only wants to describe a co
 ## Git safety
 
 Git information is read through `GitManager`. The UI does not offer silent reset, force, checkout, or destructive cleanup actions. Conflicts are surfaced explicitly.
+
+## Provider safety
+
+The Models screen reads `ModelManager` and displays provider/model metadata only. It never prints resolved credentials. Use the existing setup flow for credential configuration, for example `yasincoder setup gemini`.
 
 ## Tests
 
