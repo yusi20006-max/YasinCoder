@@ -15,6 +15,7 @@ from commands.refactor import RefactorCommand
 from commands.explain import ExplainCommand
 from commands.autonomous import AutonomousCommand
 from commands.testgen import TestGenCommand
+from commands.setup import SetupCommand
 
 
 def _testgen_args(args):
@@ -51,6 +52,9 @@ def main():
     elif cmd == "doctor":
         from doctor import run as doctor_run
         raise SystemExit(doctor_run())
+    elif cmd == "setup":
+        provider = sys.argv[2] if len(sys.argv) > 2 else "gemini"
+        SetupCommand().run(provider)
     elif cmd == "project":
         print(ProjectCommand().run())
     elif cmd == "brain":
