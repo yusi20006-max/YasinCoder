@@ -11,20 +11,29 @@ permissions:
 
 jobs:
   test:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - name: Checkout
+      - name: Checkout clean clone
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+
       - name: Verify clean-clone invariants
         shell: bash
         run: |
           set -euo pipefail
           test -f README.md
           test -f LICENSE
+          test -f VERSION
+          test -f pyproject.toml
           test -f config.example
           test -f docs/ARCHITECTURE.md
           test -f docs/CONFIGURATION.md
@@ -33,7 +42,34 @@ jobs:
           grep -Fq '*.safetensors' .gitignore
           grep -Fq '*.bin' .gitignore
           grep -Fq 'models/' .gitignore
+
+      - name: Build and install package from clean source
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-deps .
+
       - name: Compile Python sources
         run: python -m compileall -q .
+
       - name: Run deterministic test suite
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Security and repository hygiene checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked=$(git ls-files)
+          if printf '%s\n' "$tracked" | grep -Eiq '(^|/)(\.env|\.env\.|.*\.(pem|key|p12|pfx|gguf|safetensors|bin))$'; then
+            echo 'Potential secret or model artifact tracked by git' >&2
+            printf '%s\n' "$tracked" | grep -Ei '(^|/)(\.env|\.env\.|.*\.(pem|key|p12|pfx|gguf|safetensors|bin))$' >&2
+            exit 1
+          fi
+          if git grep -nEI '(sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})' -- . ':!docs' ':!.github' ; then
+            echo 'Potential credential-like token found in tracked source' >&2
+            exit 1
+          fi
+
+      - name: Build wheel artifact
+        run: |
+          python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
+          test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
