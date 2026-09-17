@@ -12,15 +12,7 @@ DEFAULT_CONFIG_DIR = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config"))
 DEFAULT_MODELS_FILE = DEFAULT_CONFIG_DIR / "models.json"
 SCHEMA_VERSION = 2
 SECRET_KEYS = {"api_key", "api_token", "token", "password", "secret"}
-SUPPORTED_TYPES = {
-    "openai_compatible",
-    "openai",
-    "custom",
-    "ollama",
-    "llama_cpp",
-    "cloudflare",
-    "gemini",
-}
+SUPPORTED_TYPES = {"openai_compatible", "openai", "custom", "ollama", "llama_cpp", "cloudflare", "gemini"}
 
 
 def _path() -> Path:
@@ -36,7 +28,7 @@ class ModelValidationError(ValueError):
 
 
 class ModelManager:
-    """User-owned registry. Secrets are referenced by environment variable only."""
+    """User-owned registry. Secrets are referenced by environment variable or file only."""
 
     def __init__(self, path: str | Path | None = None):
         self.path = Path(path).expanduser() if path else _path()
@@ -69,7 +61,7 @@ class ModelManager:
             raise ModelValidationError(f"unsupported provider type: {kind or '<empty>'}")
         for key in SECRET_KEYS:
             if key in model and model[key]:
-                raise ModelValidationError(f"secret value '{key}' must not be stored; use an *_ENV reference")
+                raise ModelValidationError(f"secret value '{key}' must not be stored; use an *_ENV or *_FILE reference")
         aliases = model.get("aliases", [])
         if isinstance(aliases, str):
             aliases = [aliases]
@@ -95,6 +87,8 @@ class ModelManager:
         for key, value in model.items():
             if key.endswith("_env") and value and (not isinstance(value, str) or not value.strip()):
                 raise ModelValidationError(f"{key} must name an environment variable")
+            if key.endswith("_file") and value and (not isinstance(value, str) or not value.strip()):
+                raise ModelValidationError(f"{key} must name a credential file")
         return model
 
     def save(self) -> None:
@@ -162,15 +156,23 @@ class ModelManager:
 
     @staticmethod
     def resolve_secrets(model: dict[str, Any]) -> dict[str, Any]:
-        """Return a runtime copy with environment-backed credentials resolved."""
+        """Return a runtime copy with environment/file-backed credentials resolved."""
         resolved = dict(model)
         for key, env_name in list(model.items()):
-            if not key.endswith("_env") or not env_name:
-                continue
-            target = key[:-4]
-            value = os.getenv(str(env_name), "")
-            if value:
-                resolved[target] = value
+            if key.endswith("_env") and env_name:
+                target = key[:-4]
+                value = os.getenv(str(env_name), "")
+                if value:
+                    resolved[target] = value
+        for key, file_name in list(resolved.items()):
+            if key.endswith("_file") and file_name:
+                target = key[:-5]
+                try:
+                    value = Path(str(file_name)).expanduser().read_text(encoding="utf-8").strip()
+                except OSError:
+                    value = ""
+                if value:
+                    resolved[target] = value
         return resolved
 
     @staticmethod
@@ -189,24 +191,15 @@ class ModelManager:
     def _discover_openai_models(self, base: str) -> list[str]:
         data = self._json(self._openai_base(base), "/v1/models") or {}
         values = data.get("data") or data.get("models") or []
-        return [
-            str(x.get("id") or x.get("name"))
-            for x in values
-            if isinstance(x, dict) and (x.get("id") or x.get("name"))
-        ]
+        return [str(x.get("id") or x.get("name")) for x in values if isinstance(x, dict) and (x.get("id") or x.get("name"))]
 
     def _discover_ollama_models(self, base: str) -> list[str]:
         data = self._json(base, "/api/tags") or {}
-        return [
-            str(x.get("name"))
-            for x in data.get("models", [])
-            if isinstance(x, dict) and x.get("name")
-        ]
+        return [str(x.get("name")) for x in data.get("models", []) if isinstance(x, dict) and x.get("name")]
 
     def discover(self) -> list[dict[str, Any]]:
         """Discover configured and locally reachable providers without persisting secrets."""
         found: list[dict[str, Any]] = []
-
         env_url = os.getenv("YASIN_BASE_URL", "").strip()
         env_model = os.getenv("YASIN_MODEL_NAME", "").strip()
         if env_url:
@@ -216,61 +209,23 @@ class ModelManager:
             if not names:
                 names = ["configured-endpoint"] if env_model else []
             for model_name in names:
-                found.append({
-                    "name": model_name if len(names) == 1 else f"openai:{model_name}",
-                    "type": "openai_compatible",
-                    "base_url": env_url,
-                    "model": model_name if model_name != "configured-endpoint" else env_model,
-                    "api_key_env": "YASIN_API_KEY" if os.getenv("YASIN_API_KEY") else "",
-                    "timeout": float(os.getenv("YASIN_TIMEOUT", "120")),
-                    "temperature": float(os.getenv("YASIN_TEMPERATURE", "0.2")),
-                    "max_tokens": int(os.getenv("YASIN_MAX_TOKENS", "4096")),
-                })
-
+                found.append({"name": model_name if len(names) == 1 else f"openai:{model_name}", "type": "openai_compatible", "base_url": env_url, "model": model_name if model_name != "configured-endpoint" else env_model, "api_key_env": "YASIN_API_KEY" if os.getenv("YASIN_API_KEY") else "", "timeout": float(os.getenv("YASIN_TIMEOUT", "120")), "temperature": float(os.getenv("YASIN_TEMPERATURE", "0.2")), "max_tokens": int(os.getenv("YASIN_MAX_TOKENS", "4096"))})
         google_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if google_key:
-            gemini_base = os.getenv(
-                "GEMINI_BASE_URL",
-                "https://generativelanguage.googleapis.com/v1beta/openai",
-            ).strip()
+            gemini_base = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").strip()
             gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
             names = self._discover_openai_models(gemini_base)
             if gemini_model and gemini_model not in names:
                 names.insert(0, gemini_model)
             for model_name in names:
-                found.append({
-                    "name": f"gemini:{model_name}",
-                    "type": "gemini",
-                    "base_url": gemini_base,
-                    "model": model_name,
-                    "api_key_env": "GEMINI_API_KEY" if os.getenv("GEMINI_API_KEY") else "GOOGLE_API_KEY",
-                })
-
-        cf_id = os.getenv("CF_ACCOUNT_ID", "").strip()
-        cf_token = os.getenv("CF_API_TOKEN", "").strip()
-        cf_model = os.getenv("CF_MODEL", "").strip()
+                found.append({"name": f"gemini:{model_name}", "type": "gemini", "base_url": gemini_base, "model": model_name, "api_key_env": "GEMINI_API_KEY" if os.getenv("GEMINI_API_KEY") else "GOOGLE_API_KEY"})
+        cf_id = os.getenv("CF_ACCOUNT_ID", "").strip(); cf_token = os.getenv("CF_API_TOKEN", "").strip(); cf_model = os.getenv("CF_MODEL", "").strip()
         if cf_id and cf_model:
-            found.append({
-                "name": "cloudflare",
-                "type": "cloudflare",
-                "model": cf_model,
-                "account_id_env": "CF_ACCOUNT_ID",
-                "api_token_env": "CF_API_TOKEN" if cf_token else "",
-            })
-
-        local_endpoints = (
-            ("http://127.0.0.1:18080", "llama_cpp", self._discover_openai_models),
-            ("http://127.0.0.1:11434", "ollama", self._discover_ollama_models),
-        )
+            found.append({"name": "cloudflare", "type": "cloudflare", "model": cf_model, "account_id_env": "CF_ACCOUNT_ID", "api_token_env": "CF_API_TOKEN" if cf_token else ""})
+        local_endpoints = (("http://127.0.0.1:18080", "llama_cpp", self._discover_openai_models), ("http://127.0.0.1:11434", "ollama", self._discover_ollama_models))
         for base, kind, discoverer in local_endpoints:
             for model_name in discoverer(base):
-                found.append({
-                    "name": f"{kind}:{model_name}",
-                    "type": kind,
-                    "base_url": base,
-                    "model": model_name,
-                    "offline": True,
-                })
+                found.append({"name": f"{kind}:{model_name}", "type": kind, "base_url": base, "model": model_name, "offline": True})
         return found
 
     def ensure_discovered(self) -> list[dict[str, Any]]:
@@ -286,21 +241,15 @@ class ModelManager:
 
     def validate_all(self) -> list[str]:
         errors = []
-        names: set[str] = set()
-        aliases: dict[str, str] = {}
+        names: set[str] = set(); aliases: dict[str, str] = {}
         for model in self.data["models"]:
-            try:
-                self.validate(model)
-            except ModelValidationError as exc:
-                errors.append(str(exc))
-                continue
+            try: self.validate(model)
+            except ModelValidationError as exc: errors.append(str(exc)); continue
             name = str(model["name"]).lower()
-            if name in names:
-                errors.append(f"duplicate model name: {model['name']}")
+            if name in names: errors.append(f"duplicate model name: {model['name']}")
             names.add(name)
             for alias in model.get("aliases", []):
                 key = alias.lower()
-                if key in names or (key in aliases and aliases[key] != model["name"]):
-                    errors.append(f"duplicate model alias: {alias}")
+                if key in names or (key in aliases and aliases[key] != model["name"]): errors.append(f"duplicate model alias: {alias}")
                 aliases[key] = model["name"]
         return errors
