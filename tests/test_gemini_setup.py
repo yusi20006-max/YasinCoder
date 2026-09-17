@@ -39,10 +39,29 @@ class GeminiSetupTests(unittest.TestCase):
             self.assertEqual(manager.data["default"], "gemini")
             stored = manager.get("gemini")
             self.assertEqual(stored["type"], "gemini")
+            self.assertEqual(stored["api_key_file"], str(credential))
             self.assertNotIn("api_key", stored)
+            self.assertNotIn("api_key_file_env", stored)
             self.assertNotIn("TEST_GEMINI_KEY", registry.read_text())
             self.assertEqual(credential.read_text().strip(), "TEST_GEMINI_KEY")
             self.assertEqual(credential.stat().st_mode & 0o777, 0o600)
+
+    def test_setup_persists_file_reference_for_fresh_manager_process(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "models.json"
+            credential = Path(tmp) / "gemini.key"
+            response = {"data": [{"id": "gemini-3.8-flash"}]}
+            with patch.dict(os.environ, {"YASIN_GEMINI_CREDENTIAL_FILE": str(credential)}, clear=False), patch(
+                "core.gemini_setup.urllib.request.urlopen", return_value=_Response(response)
+            ):
+                setup_gemini("TEST_GEMINI_KEY", ModelManager(registry))
+
+            fresh_manager = ModelManager(registry)
+            persisted = fresh_manager.default()
+            self.assertIsNotNone(persisted)
+            resolved = fresh_manager.resolve_secrets(persisted)
+            self.assertEqual(resolved["api_key"], "TEST_GEMINI_KEY")
+            self.assertNotIn("TEST_GEMINI_KEY", registry.read_text())
 
     def test_missing_key_fails_before_network(self):
         with self.assertRaises(GeminiSetupError):
