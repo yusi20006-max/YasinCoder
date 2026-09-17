@@ -1,25 +1,19 @@
 """Explicit coding-agent tools with workspace confinement and permissions."""
 from __future__ import annotations
 
-import json
 import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from .permissions import PermissionDenied, PermissionPolicy
+from .redaction import redact
 from .sandbox import SandboxViolation, run_process, safe_path
 
-
-NETWORK_COMMANDS = {
-    "curl", "wget", "nc", "netcat", "ssh", "scp", "sftp", "ftp",
-    "telnet", "ping", "nslookup", "dig", "host", "git-clone",
-}
-ADMIN_COMMANDS = {
-    "sudo", "su", "mount", "umount", "iptables", "nft", "useradd",
-    "userdel", "passwd", "chown", "chmod", "pkill", "killall",
-}
+NETWORK_COMMANDS = {"curl", "wget", "nc", "netcat", "ssh", "scp", "sftp", "ftp", "telnet", "ping", "nslookup", "dig", "host", "git-clone"}
+ADMIN_COMMANDS = {"sudo", "su", "mount", "umount", "iptables", "nft", "useradd", "userdel", "passwd", "chown", "chmod", "pkill", "killall"}
 GIT_COMMANDS = {"git"}
+SHELL_CONTROL_TOKENS = {";", "&&", "||", "|", ">", ">>", "<", "2>", "2>>", "&"}
 
 
 def _policy(payload: dict[str, Any]) -> PermissionPolicy:
@@ -40,8 +34,12 @@ def _audit(tool: str, capability: str, ok: bool, **extra: Any) -> dict[str, Any]
     return entry
 
 
+def _result(data: dict[str, Any]) -> dict[str, Any]:
+    return redact(data)
+
+
 def _denied(tool: str, capability: str) -> dict[str, Any]:
-    return {"ok": False, "tool": tool, "error": str(PermissionDenied(capability)), "audit": _audit(tool, capability, False)}
+    return _result({"ok": False, "tool": tool, "error": str(PermissionDenied(capability)), "audit": _audit(tool, capability, False)})
 
 
 def _require(policy: PermissionPolicy, tool: str, capability: str) -> dict[str, Any] | None:
@@ -51,7 +49,7 @@ def _require(policy: PermissionPolicy, tool: str, capability: str) -> dict[str, 
 
 
 def _workspace_info(root: Path) -> dict[str, Any]:
-    return {"ok": True, "tool": "workspace.info", "root": str(root), "exists": root.exists(), "audit": _audit("workspace.info", "read", True)}
+    return _result({"ok": True, "tool": "workspace.info", "root": str(root), "exists": root.exists(), "audit": _audit("workspace.info", "read", True)})
 
 
 def _file_read(payload: dict[str, Any], root: Path) -> dict[str, Any]:
@@ -60,9 +58,9 @@ def _file_read(payload: dict[str, Any], root: Path) -> dict[str, Any]:
         return denied
     path = safe_path(payload["path"], root)
     if not path.is_file():
-        return {"ok": False, "tool": "file.read", "error": "file not found", "audit": _audit("file.read", "read", False)}
+        return _result({"ok": False, "tool": "file.read", "error": "file not found", "audit": _audit("file.read", "read", False)})
     content = path.read_text(encoding="utf-8")
-    return {"ok": True, "tool": "file.read", "path": str(path), "content": content, "audit": _audit("file.read", "read", True)}
+    return _result({"ok": True, "tool": "file.read", "path": str(path), "content": content, "audit": _audit("file.read", "read", True)})
 
 
 def _file_write(payload: dict[str, Any], root: Path) -> dict[str, Any]:
@@ -70,13 +68,13 @@ def _file_write(payload: dict[str, Any], root: Path) -> dict[str, Any]:
     path = safe_path(payload["path"], root)
     content = str(payload.get("content", ""))
     if not payload.get("apply", False):
-        return {"ok": True, "tool": "file.write", "path": str(path), "applied": False, "content": content, "audit": _audit("file.write", "write", True, applied=False)}
+        return _result({"ok": True, "tool": "file.write", "path": str(path), "applied": False, "content": content, "audit": _audit("file.write", "write", True, applied=False)})
     denied = _require(policy, "file.write", "write")
     if denied:
         return denied
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    return {"ok": True, "tool": "file.write", "path": str(path), "applied": True, "audit": _audit("file.write", "write", True, applied=True)}
+    return _result({"ok": True, "tool": "file.write", "path": str(path), "applied": True, "audit": _audit("file.write", "write", True, applied=True)})
 
 
 def _search(payload: dict[str, Any], root: Path) -> dict[str, Any]:
@@ -86,7 +84,7 @@ def _search(payload: dict[str, Any], root: Path) -> dict[str, Any]:
     pattern = str(payload.get("pattern", ""))
     try:
         result = subprocess.run(["rg", "--line-number", "--hidden", "--glob", "!.git", pattern, str(root)], capture_output=True, text=True, timeout=15)
-        return {"ok": result.returncode in (0, 1), "tool": "search", "output": result.stdout, "error": result.stderr, "audit": _audit("search", "read", result.returncode in (0, 1))}
+        return _result({"ok": result.returncode in (0, 1), "tool": "search", "output": result.stdout, "error": result.stderr, "audit": _audit("search", "read", result.returncode in (0, 1))})
     except (FileNotFoundError, subprocess.TimeoutExpired):
         matches = []
         for path in root.rglob("*"):
@@ -98,20 +96,22 @@ def _search(payload: dict[str, Any], root: Path) -> dict[str, Any]:
                         matches.append(f"{path}:{index}:{line}")
             except (UnicodeDecodeError, OSError):
                 continue
-        return {"ok": True, "tool": "search", "output": "\n".join(matches), "fallback": True, "audit": _audit("search", "read", True, fallback=True)}
+        return _result({"ok": True, "tool": "search", "output": "\n".join(matches), "fallback": True, "audit": _audit("search", "read", True, fallback=True)})
 
 
 def _shell(payload: dict[str, Any], root: Path, tool_name: str = "shell.exec") -> dict[str, Any]:
     policy = _policy(payload)
     command = str(payload.get("command", "")).strip()
     if not command:
-        return {"ok": False, "tool": tool_name, "error": "empty command", "audit": _audit(tool_name, "execute", False)}
+        return _result({"ok": False, "tool": tool_name, "error": "empty command", "audit": _audit(tool_name, "execute", False)})
+    if any(token in command for token in SHELL_CONTROL_TOKENS):
+        return _result({"ok": False, "tool": tool_name, "error": "shell control operators are rejected; pass argv without shell syntax", "audit": _audit(tool_name, "execute", False)})
     try:
         argv = shlex.split(command)
     except ValueError as exc:
-        return {"ok": False, "tool": tool_name, "error": str(exc), "audit": _audit(tool_name, "execute", False)}
+        return _result({"ok": False, "tool": tool_name, "error": str(exc), "audit": _audit(tool_name, "execute", False)})
     if not argv:
-        return {"ok": False, "tool": tool_name, "error": "empty command", "audit": _audit(tool_name, "execute", False)}
+        return _result({"ok": False, "tool": tool_name, "error": "empty command", "audit": _audit(tool_name, "execute", False)})
     executable = Path(argv[0]).name.lower()
     if executable in GIT_COMMANDS:
         capability = "git"
@@ -124,9 +124,9 @@ def _shell(payload: dict[str, Any], root: Path, tool_name: str = "shell.exec") -
     denied = _require(policy, tool_name, capability)
     if denied:
         return denied
-    result = run_process(argv, cwd=root, timeout=float(payload.get("timeout", 60)))
-    result.update({"tool": tool_name, "command": command, "audit": _audit(tool_name, capability, bool(result.get("ok")))})
-    return result
+    result = run_process(argv, cwd=root, timeout=float(payload.get("timeout", 60)), max_output_bytes=int(payload.get("max_output_bytes", 1_048_576)))
+    result.update({"tool": tool_name, "audit": _audit(tool_name, capability, bool(result.get("ok")))})
+    return _result(result)
 
 
 def execute(name: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -144,10 +144,11 @@ def execute(name: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         if name == "shell.exec":
             return _shell(payload, root)
         if name == "git.exec":
-            payload["command"] = "git " + " ".join(shlex.quote(str(x)) for x in payload.get("args", []))
+            args = [str(x) for x in payload.get("args", [])]
+            payload["command"] = "git " + " ".join(shlex.quote(x) for x in args)
             return _shell(payload, root, "git.exec")
         if name == "test.run":
             return _shell(payload, root, "test.run")
-        return {"ok": False, "tool": name, "error": "unknown tool"}
+        return _result({"ok": False, "tool": name, "error": "unknown tool", "audit": _audit(name, "none", False)})
     except (KeyError, SandboxViolation, OSError, UnicodeError, ValueError) as exc:
-        return {"ok": False, "tool": name, "error": str(exc), "audit": _audit(name, "read", False)}
+        return _result({"ok": False, "tool": name, "error": str(exc), "audit": _audit(name, "execute", False)})
