@@ -77,15 +77,16 @@ def run_process(
         timed_out = True
         try:
             os.killpg(process.pid, signal.SIGTERM)
-            process.communicate(timeout=2)
-        except (ProcessLookupError, subprocess.TimeoutExpired):
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            process.communicate()
-        stdout = (process.stdout.read() if process.stdout else b"")
-        stderr = (process.stderr.read() if process.stderr else b"")
+            stdout, stderr = process.communicate()
         if len(stdout) + len(stderr) > max_output_bytes:
             keep = max_output_bytes // 2
             stdout, stderr = stdout[:keep], stderr[:keep]

@@ -12,6 +12,7 @@ import shutil
 import sqlite3
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -228,11 +229,14 @@ class StateStore:
             raise ValueError(f"project already exists: {new_id}")
         self._mutate()
         self._conn.execute("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)", (new_id, source["name"], source["root"], self._json(source.get("metadata")), source["created_at"], source["updated_at"]))
+        # Imported items keep no foreign identity: remap ids so importing an
+        # export back into the same store (or twice) cannot violate UNIQUE
+        # constraints on the shared id columns.
         for item in payload.get("sessions", []):
-            self._conn.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)", (item["id"], new_id, item.get("title", ""), self._json(item.get("state")), item["created_at"], item["updated_at"]))
+            self._conn.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)", (uuid.uuid4().hex, new_id, item.get("title", ""), self._json(item.get("state")), item["created_at"], item["updated_at"]))
         for item in payload.get("tasks", []):
-            self._conn.execute("INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)", (item["id"], new_id, item["title"], item.get("status", "pending"), self._json(item.get("metadata")), item["created_at"], item["updated_at"]))
+            self._conn.execute("INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)", (uuid.uuid4().hex, new_id, item["title"], item.get("status", "pending"), self._json(item.get("metadata")), item["created_at"], item["updated_at"]))
         for item in payload.get("memories", []):
-            self._conn.execute("INSERT INTO memories(id, project_id, content, metadata, created_at) VALUES (?, ?, ?, ?, ?)", (item["id"], new_id, item["content"], self._json(item.get("metadata")), item["created_at"]))
+            self._conn.execute("INSERT INTO memories(id, project_id, content, metadata, created_at) VALUES (?, ?, ?, ?, ?)", (uuid.uuid4().hex, new_id, item["content"], self._json(item.get("metadata")), item["created_at"]))
         self._conn.commit()
         return new_id
