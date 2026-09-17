@@ -1,0 +1,8 @@
+name = "yasincoder-gateway"
+main = "src/index.js"
+compatibility_date = "2026-09-17"
+workers_dev = true
+
+[vars]
+YASIN_MAX_BODY_BYTES = "1048576"
+YASIN_RATE_LIMIT_PER_MINUTE = "60"
