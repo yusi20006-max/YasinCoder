@@ -58,6 +58,12 @@ class ProviderAdapterTests(unittest.TestCase):
         adapter = OpenAICompatibleAdapter({"name": "remote", "base_url": "http://remote", "model": "m"}); error = urllib.error.HTTPError("http://remote", 401, "unauthorized", {}, None)
         with patch("urllib.request.urlopen", side_effect=error):
             with self.assertRaises(ProviderAuthenticationError): adapter.chat("hello")
+    def test_openai_compatible_malformed_json_shape_is_normalized(self):
+        adapter = OpenAICompatibleAdapter({"name": "remote", "base_url": "http://remote", "model": "m"})
+        with patch("urllib.request.urlopen", return_value=Response(["not", "an", "object"])):
+            with self.assertRaises(ProviderRequestError):
+                adapter.chat("hello")
+
     def test_openai_compatible_empty_response_is_normalized(self):
         adapter = OpenAICompatibleAdapter({"name": "remote", "base_url": "http://remote", "model": "m"})
         with patch("urllib.request.urlopen", return_value=Response({"choices": []})):
@@ -67,6 +73,12 @@ class ProviderAdapterTests(unittest.TestCase):
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("offline")):
             with self.assertRaises(ProviderUnavailable) as context: adapter.chat("hello")
         self.assertNotIn("SECRET", str(context.exception))
+    def test_ollama_malformed_json_shape_is_normalized(self):
+        adapter = OllamaAdapter({"name": "ollama", "type": "ollama", "base_url": "http://local", "model": "m"})
+        with patch("urllib.request.urlopen", return_value=Response(["not", "an", "object"])):
+            with self.assertRaises(ProviderRequestError):
+                adapter.chat("hello")
+
     def test_ollama_contract_and_chat(self):
         adapter = OllamaAdapter({"name": "ollama", "type": "ollama", "base_url": "http://local", "model": "m"}); self.assert_contract(adapter)
         with patch("urllib.request.urlopen", return_value=Response({"response": "ok"})): self.assertEqual(adapter.chat("hello"), "ok")
@@ -77,6 +89,12 @@ class ProviderAdapterTests(unittest.TestCase):
     def test_ollama_discovery_and_validation(self):
         adapter = OllamaAdapter({"name": "ollama", "type": "ollama", "base_url": "http://local", "model": "m"})
         with patch("urllib.request.urlopen", return_value=Response({"models": [{"name": "m"}, {"name": "other"}]})): self.assertEqual(adapter.list_models(), ["m", "other"]); self.assertTrue(adapter.validate_model())
+    def test_cloudflare_malformed_json_shape_is_normalized(self):
+        adapter = CloudflareProvider({"name": "cf", "type": "cloudflare", "account_id": "a", "api_token": "t", "model": "m"})
+        with patch("urllib.request.urlopen", return_value=Response(["not", "an", "object"])):
+            with self.assertRaises(ProviderRequestError):
+                adapter.chat("hello")
+
     def test_cloudflare_contract_and_chat(self):
         adapter = CloudflareProvider({"name": "cf", "type": "cloudflare", "account_id": "a", "api_token": "t", "model": "m"}); self.assert_contract(adapter)
         with patch("urllib.request.urlopen", return_value=Response({"result": {"response": "ok"}})): self.assertEqual(adapter.chat("hello"), "ok")
