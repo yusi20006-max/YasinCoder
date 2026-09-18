@@ -40,3 +40,10 @@ Stable features are documented, tested and covered by the release gate. Experime
 ## Rollback
 
 To roll back, check out the previous release tag, reinstall/build from that tag, and reuse the user's external configuration. Do not restore model binaries or secrets from Git history.
+
+## 0.2.0 release evidence boundaries
+
+- Native interactive Termux/Android acceptance is not claimed from GitHub-hosted CI.
+- Live provider credentials and live Cloudflare deployment are not required for deterministic release tests and are reported separately when unavailable.
+- The Cloudflare Worker uses an optional native Rate Limiting binding; Cloudflare documents that its counters are local to each Cloudflare location and eventually consistent, so it is not an exact global quota.
+- Rollback from v0.2.0 preserves external user configuration because credentials, models, caches, logs, and runtime state remain outside Git.

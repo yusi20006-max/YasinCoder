@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0
+
+- Completed the production Terminal UI acceptance audit with deterministic coverage for non-interactive, invalid-input, and task-recovery behavior.
+- Hardened provider/runtime reliability with normalized malformed-response handling across OpenAI-compatible, Ollama, and Cloudflare adapters.
+- Added a provider/runtime reliability matrix with explicit PASS and NOT TESTED evidence boundaries.
+- Hardened sandbox subprocess output capture so configured output limits are enforced without unbounded pipe buffering.
+- Added adversarial symlink-escape and output-limit regression coverage.
+- Added stable Linux, macOS, and Windows platform integration CI coverage while keeping native Termux/Android execution explicitly separate.
+- Added optional Cloudflare-native Rate Limiting binding support with fail-closed behavior when a configured limiter is unavailable.
+- Added bounded, secret-safe production diagnostics and GitHub/TUI diagnostic redaction.
+- Preserved externalized credentials, local/offline isolation, capability gates, and clean-clone packaging.
+
 ## 0.1.0
 
 - Added canonical semantic version metadata in `VERSION`.

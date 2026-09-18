@@ -124,7 +124,7 @@ See `worker/README.md` for Wrangler deployment and secret configuration.
 
 ## Supported platforms
 
-The Python project declares Python `>=3.10`. CI verifies Python 3.10–3.13 on Linux. The code is designed to remain portable across Linux/macOS/Windows and Termux where the selected Python runtime and provider are available. Local model runtimes such as Ollama or llama.cpp are external dependencies.
+The Python project declares Python `>=3.10`. CI verifies Python 3.10–3.13 on Linux and runs platform integration coverage on Linux, macOS, and Windows with Python 3.12. Native Termux/Android remains a first-class target but is not executed by repository CI; interactive Android acceptance must be verified on a real Termux environment. Local model runtimes such as Ollama or llama.cpp are external dependencies.
 
 ## Security rules
 
