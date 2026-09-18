@@ -40,3 +40,10 @@ The Worker uses `YASIN_WORKER_API_KEY` for client authentication and `YASIN_UPST
 3. Keep autonomous execution inside an approved workspace.
 4. Treat provider responses as untrusted data.
 5. Fail closed on malformed commands, path escapes, permission failures, and resource-limit violations.
+
+## Resource controls
+
+- Subprocess execution has a bounded wall-clock timeout and terminates the process group on timeout.
+- stdout/stderr are drained concurrently and retained only up to the configured aggregate output limit, avoiding unbounded pipe capture.
+- Workspace paths are resolved before use, so traversal and symlink escapes are rejected.
+- CPU, memory, and process-count limits are not claimed as portable enforcement guarantees because native Termux/Android, Linux, macOS, and Windows expose different primitives. The implementation therefore relies on the portable timeout/output/process-cleanup controls and records stronger OS-specific limits as deployment responsibilities rather than silently weakening the security model.
