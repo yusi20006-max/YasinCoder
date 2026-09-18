@@ -66,9 +66,11 @@ def run_process(
     stdout_chunks: list[bytes] = []
     stderr_chunks: list[bytes] = []
     captured = {"stdout": 0, "stderr": 0}
+    output_limited = False
     lock = threading.Lock()
 
     def drain(stream, chunks, key: str) -> None:
+        nonlocal output_limited
         if stream is None:
             return
         while True:
@@ -76,11 +78,15 @@ def run_process(
             if not chunk:
                 return
             with lock:
-                remaining = max_output_bytes - captured[key]
-                if remaining > 0:
-                    keep = chunk[:remaining]
-                    chunks.append(keep)
-                    captured[key] += len(keep)
+                remaining = max_output_bytes - captured["stdout"] - captured["stderr"]
+                if remaining <= 0:
+                    output_limited = True
+                    continue
+                keep = chunk[:remaining]
+                chunks.append(keep)
+                captured[key] += len(keep)
+                if len(chunk) > len(keep):
+                    output_limited = True
 
     stdout_thread = threading.Thread(
         target=drain, args=(process.stdout, stdout_chunks, "stdout"), daemon=True
@@ -116,7 +122,6 @@ def run_process(
 
     stdout = b"".join(stdout_chunks)
     stderr = b"".join(stderr_chunks)
-    output_limited = captured["stdout"] + captured["stderr"] >= max_output_bytes
     return {
         "ok": process.returncode == 0 and not timed_out and not output_limited,
         "returncode": process.returncode,
