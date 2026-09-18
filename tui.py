@@ -40,6 +40,15 @@ def _paint(text: str, code: str, enabled: bool) -> str:
     return f"{code}{text}{RESET}" if enabled else text
 
 
+def _supports_unicode() -> bool:
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return encoding.lower().replace("-", "") in {"utf8", "utf16", "utf32"}
+
+
+def _line(width: int) -> str:
+    return ("─" if _supports_unicode() else "-") * width
+
+
 def _clip(text: str, width: int) -> str:
     text = str(text).replace("\t", " ").replace("\r", "")
     if width <= 1:
@@ -74,12 +83,12 @@ class YasinCoderTUI:
 
     def header(self, title: str) -> None:
         self.refresh_size()
-        line = "─" * self.width
+        line = _line(self.width)
         print(_paint(" YASIN CODER ", BOLD + CYAN, self.ansi) + _paint(f"  {title}", BOLD, self.ansi))
         print(_paint(line, DIM, self.ansi))
 
     def footer(self) -> None:
-        print(_paint("─" * self.width, DIM, self.ansi))
+        print(_paint(_line(self.width), DIM, self.ansi))
         print(_paint("[1] Dashboard  [2] Task  [3] Projects  [4] Sessions  [5] Models  [6] Git  [7] Tests  [8] System  [9] Settings  [q] Quit", DIM, self.ansi))
 
     def dashboard(self) -> None:
@@ -171,7 +180,7 @@ class YasinCoderTUI:
                 print("No configured models. Use: yasincoder setup gemini")
             for item in models:
                 active = default and item.get("name") == default.get("name")
-                marker = "●" if active else "○"
+                marker = "●" if active and _supports_unicode() else ("*" if active else "-")
                 state = "active" if active else "configured"
                 print(f" {marker} {_clip(str(item.get('name')), self.width - 30)}  {item.get('type', '')}  {state}")
         except Exception as exc:
