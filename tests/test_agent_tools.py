@@ -87,7 +87,7 @@ def test_output_limit_is_enforced_without_unbounded_capture(tmp_path):
     result = execute(
         "shell.exec",
         {
-            "command": "python -c 'print("x" * 20000)'",
+            "command": "python -c \"print('x' * 20000)\"",
             "root": str(tmp_path),
             "permissions": EXEC_POLICY,
             "max_output_bytes": 4096,
