@@ -5,6 +5,7 @@ import os
 import signal
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 from typing import Sequence
 
@@ -50,29 +51,55 @@ def run_process(
     cwd = Path(cwd).expanduser().resolve()
     if not cwd.is_dir():
         raise SandboxViolation("working directory does not exist")
+
     process = subprocess.Popen(
-        list(command), cwd=str(cwd), env=env, stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False, start_new_session=True,
+        list(command),
+        cwd=str(cwd),
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=False,
+        start_new_session=True,
     )
-    timed_out = False
+
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+    captured = {"stdout": 0, "stderr": 0}
     output_limited = False
+    lock = threading.Lock()
+
+    def drain(stream, chunks, key: str) -> None:
+        nonlocal output_limited
+        if stream is None:
+            return
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                return
+            with lock:
+                remaining = max_output_bytes - captured["stdout"] - captured["stderr"]
+                if remaining <= 0:
+                    output_limited = True
+                    continue
+                keep = chunk[:remaining]
+                chunks.append(keep)
+                captured[key] += len(keep)
+                if len(chunk) > len(keep):
+                    output_limited = True
+
+    stdout_thread = threading.Thread(
+        target=drain, args=(process.stdout, stdout_chunks, "stdout"), daemon=True
+    )
+    stderr_thread = threading.Thread(
+        target=drain, args=(process.stderr, stderr_chunks, "stderr"), daemon=True
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+
+    timed_out = False
     try:
-        stdout_b, stderr_b = process.communicate(timeout=timeout)
-        if len(stdout_b) + len(stderr_b) > max_output_bytes:
-            output_limited = True
-            keep = max_output_bytes // 2
-            stdout_b, stderr_b = stdout_b[:keep], stderr_b[:keep]
-        stdout = stdout_b.decode("utf-8", errors="replace")
-        stderr = stderr_b.decode("utf-8", errors="replace")
-        return {
-            "ok": process.returncode == 0 and not output_limited,
-            "returncode": process.returncode,
-            "stdout": stdout,
-            "stderr": stderr,
-            "timed_out": False,
-            "output_limited": output_limited,
-            **({"error": "command output exceeded configured limit"} if output_limited else {}),
-        }
+        process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
         try:
@@ -80,23 +107,28 @@ def run_process(
         except ProcessLookupError:
             pass
         try:
-            stdout, stderr = process.communicate(timeout=2)
+            process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            stdout, stderr = process.communicate()
-        if len(stdout) + len(stderr) > max_output_bytes:
-            keep = max_output_bytes // 2
-            stdout, stderr = stdout[:keep], stderr[:keep]
-            output_limited = True
-        return {
-            "ok": False,
-            "returncode": process.returncode,
-            "stdout": stdout.decode("utf-8", errors="replace"),
-            "stderr": stderr.decode("utf-8", errors="replace"),
-            "timed_out": timed_out,
-            "output_limited": output_limited,
-            "error": "command timed out and process group was terminated",
-        }
+            process.wait()
+
+    stdout_thread.join(timeout=2)
+    stderr_thread.join(timeout=2)
+    if stdout_thread.is_alive() or stderr_thread.is_alive():
+        raise RuntimeError("bounded process output reader did not terminate")
+
+    stdout = b"".join(stdout_chunks)
+    stderr = b"".join(stderr_chunks)
+    return {
+        "ok": process.returncode == 0 and not timed_out and not output_limited,
+        "returncode": process.returncode,
+        "stdout": stdout.decode("utf-8", errors="replace"),
+        "stderr": stderr.decode("utf-8", errors="replace"),
+        "timed_out": timed_out,
+        "output_limited": output_limited,
+        **({"error": "command output exceeded configured limit"} if output_limited else {}),
+        **({"error": "command timed out and process group was terminated"} if timed_out else {}),
+    }

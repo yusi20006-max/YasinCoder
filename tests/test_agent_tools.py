@@ -66,3 +66,33 @@ def test_git_requires_git_permission(tmp_path):
 def test_unknown_tool_is_structured():
     result = execute("missing.tool")
     assert result == {"ok": False, "tool": "missing.tool", "error": "unknown tool", "audit": {"tool": "missing.tool", "capability": "none", "ok": False}}
+
+def test_symlink_escape_is_rejected(tmp_path):
+    outside = tmp_path.parent / "outside-yasincoder"
+    outside.mkdir()
+    link = tmp_path / "link"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        return
+    try:
+        safe_path("link/secret.txt", tmp_path)
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("symlink escape was not rejected")
+
+
+def test_output_limit_is_enforced_without_unbounded_capture(tmp_path):
+    result = execute(
+        "shell.exec",
+        {
+            "command": "python -c 'print("x" * 20000)'",
+            "root": str(tmp_path),
+            "permissions": EXEC_POLICY,
+            "max_output_bytes": 4096,
+        },
+    )
+    assert result["ok"] is False
+    assert result["output_limited"] is True
+    assert len(result["stdout"]) <= 4096
