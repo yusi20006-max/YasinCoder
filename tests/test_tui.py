@@ -1,3 +1,4 @@
+import builtins
 import os
 import unittest
 from unittest.mock import patch
@@ -36,19 +37,20 @@ class TuiUnitTests(unittest.TestCase):
 
     def test_invalid_interactive_choice_is_rejected_without_exit(self):
         app = tui.YasinCoderTUI()
-        choices = iter(["invalid", "q"])
         with patch("tui.sys.stdin.isatty", return_value=True), patch(
             "tui.sys.stdout.isatty", return_value=True
-        ), patch("tui.YasinCoderTUI.dashboard"), patch(
-            "tui.input", side_effect=AssertionError("unexpected")
+        ), patch.object(app, "dashboard"), patch(
+            "builtins.input", side_effect=["invalid", "q"]
         ):
-            pass
+            self.assertEqual(app.run(), 0)
 
     def test_task_failure_is_recovered_and_control_returns_to_menu(self):
         app = tui.YasinCoderTUI()
         with patch("tui.sys.stdin.isatty", return_value=True), patch(
             "tui.sys.stdout.isatty", return_value=True
-        ), patch("tui.input", side_effect=["2", "bad task", "", "q"]), patch(
+        ), patch(
+            "builtins.input", side_effect=["2", "bad task", "", "q"]
+        ), patch(
             "commands.autonomous.AutonomousCommand.run", side_effect=RuntimeError("boom")
         ):
             self.assertEqual(app.run(), 0)
