@@ -154,6 +154,7 @@ CI additionally validates repository hygiene, package installation, the Python m
 - `docs/SECURITY.md` — execution and secret-handling rules
 - `docs/RELEASE.md` — versioning and release policy
 - `docs/TROUBLESHOOTING.md` — common setup/runtime failures
+- `docs/DIAGNOSTICS.md` — bounded production diagnostic categories and redaction rules
 - `worker/README.md` — Cloudflare Worker deployment
 
 Roadmap state is tracked by GitHub Issues; completed features should not remain duplicated as TODO items.

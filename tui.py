@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from core.diagnostics import from_exception
 from git_manager import GitManager
 from models.manager import ModelManager
 from project import project_info
@@ -90,7 +91,7 @@ class YasinCoderTUI:
             import importlib.metadata as metadata
             version = metadata.version("yasincoder")
         except Exception as exc:
-            print(_paint(f"Unable to read dashboard state: {exc}", RED, self.ansi))
+            print(_paint(from_exception(exc).message, RED, self.ansi))
             self.footer(); return
         provider = str(model.get("type", "none")) if model else "none"
         model_name = str(model.get("model") or model.get("name") or "none") if model else "none"
@@ -132,7 +133,7 @@ class YasinCoderTUI:
             print(_paint(f"Done · {elapsed:.1f}s", GREEN, self.ansi))
             print(_clip(result, self.width))
         except Exception as exc:
-            print(_paint(f"Task failed: {exc}", RED, self.ansi))
+            print(_paint(f"Task failed: {from_exception(exc).message}", RED, self.ansi))
         input("Press Enter to continue…")
 
     def projects(self) -> None:
@@ -145,7 +146,7 @@ class YasinCoderTUI:
             for path in info["files"][: max(3, self.height - 10)]:
                 print("  " + _clip(str(path), self.width - 4))
         except Exception as exc:
-            print(_paint(str(exc), RED, self.ansi))
+            print(_paint(from_exception(exc).message, RED, self.ansi))
         self.footer()
 
     def sessions(self) -> None:
@@ -174,7 +175,7 @@ class YasinCoderTUI:
                 state = "active" if active else "configured"
                 print(f" {marker} {_clip(str(item.get('name')), self.width - 30)}  {item.get('type', '')}  {state}")
         except Exception as exc:
-            print(_paint(f"Model registry error: {exc}", RED, self.ansi))
+            print(_paint(f"Model registry error: {from_exception(exc).message}", RED, self.ansi))
         self.footer()
 
     def git(self) -> None:
@@ -224,12 +225,12 @@ class YasinCoderTUI:
             git = GitManager(self.project)
             checks.append(("Git", "OK" if git.is_repository() else "not a repository"))
         except Exception as exc:
-            checks.append(("Git", f"error: {exc}"))
+            checks.append(("Git", f"error: {from_exception(exc).message}"))
         try:
             model = ModelManager().default()
             checks.append(("Provider", str(model.get("type")) if model else "none configured"))
         except Exception as exc:
-            checks.append(("Provider", f"error: {exc}"))
+            checks.append(("Provider", f"error: {from_exception(exc).message}"))
         for key, value in checks:
             print(f"  {_paint(key + ':', BOLD, self.ansi):<18} {value}")
         self.footer()
