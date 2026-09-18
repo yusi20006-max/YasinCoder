@@ -11,12 +11,17 @@ class WorkerContractTests(unittest.TestCase):
     def test_required_routes_and_controls_exist(self):
         for route in ("/health", "/v1/models", "/v1/chat/completions", "/api/chat"):
             self.assertIn(route, self.worker)
-        for name in ("YASIN_WORKER_API_KEY", "YASIN_UPSTREAM_URL", "YASIN_UPSTREAM_API_KEY", "YASIN_MAX_BODY_BYTES", "YASIN_RATE_LIMIT_PER_MINUTE"):
+        for name in ("YASIN_WORKER_API_KEY", "YASIN_UPSTREAM_URL", "YASIN_UPSTREAM_API_KEY", "YASIN_MAX_BODY_BYTES", "YASIN_RATE_LIMIT_PER_MINUTE", "YASIN_RATE_LIMITER"):
             self.assertIn(name, self.worker)
+        self.assertIn("async function rateLimit", self.worker)
+        self.assertIn("rate_limiter_unavailable", self.worker)
+        self.assertIn("env.YASIN_RATE_LIMITER.limit", self.worker)
 
     def test_worker_is_configured_for_wrangler(self):
         self.assertIn('main = "src/index.js"', self.config)
         self.assertIn('compatibility_date = "2026-09-17"', self.config)
+        self.assertIn("[[ratelimits]]", self.config)
+        self.assertIn('name = "YASIN_RATE_LIMITER"', self.config)
 
     def test_worker_does_not_expose_upstream_credential(self):
         self.assertIn("authorization", self.worker)
