@@ -39,19 +39,29 @@ function limit(request, env) {
   return Number.isFinite(value) ? Math.max(1024, Math.min(value, 16 * 1024 * 1024)) : 1048576;
 }
 
-function rateLimit(request, env) {
+async function rateLimit(request, env) {
   const configured = Number.parseInt(env.YASIN_RATE_LIMIT_PER_MINUTE || "60", 10);
-  if (!Number.isFinite(configured) || configured <= 0) return true;
-  const key = request.headers.get("CF-Connecting-IP") || "anonymous";
+  if (!Number.isFinite(configured) || configured <= 0) return { allowed: true };
+  const actor = (request.headers.get("Authorization") || "").replace(/^Bearer\\s+/i, "").trim() || request.headers.get("CF-Connecting-IP") || "anonymous";
+
+  if (env.YASIN_RATE_LIMITER && typeof env.YASIN_RATE_LIMITER.limit === "function") {
+    try {
+      const result = await env.YASIN_RATE_LIMITER.limit({ key: actor });
+      return { allowed: Boolean(result && result.success) };
+    } catch {
+      return { allowed: false, error: "rate_limiter_unavailable" };
+    }
+  }
+
   const bucket = Math.floor(Date.now() / 60000);
   const map = globalThis.__yasinRate || (globalThis.__yasinRate = new Map());
-  const id = `${bucket}:${key}`;
+  const id = bucket + ":" + actor;
   const count = (map.get(id) || 0) + 1;
   map.set(id, count);
   if (map.size > 2048) {
-    for (const k of map.keys()) if (!k.startsWith(`${bucket}:`)) map.delete(k);
+    for (const k of map.keys()) if (!k.startsWith(bucket + ":")) map.delete(k);
   }
-  return count <= configured;
+  return { allowed: count <= configured };
 }
 
 function upstream(env) {
@@ -99,7 +109,7 @@ export default {
     }
     if (url.pathname === "/health" || url.pathname === "/api/status") return json(request, env, 200, { ok: true, service: "yasincoder-cloudflare-gateway" });
     if (!authorized(request, env)) return json(request, env, 401, { error: { code: "unauthorized", message: "Authentication required" } });
-    if (!rateLimit(request, env)) return json(request, env, 429, { error: { code: "rate_limited", message: "Rate limit exceeded" } });
+    const rate = await rateLimit(request, env);\n    if (rate.error) return json(request, env, 503, { error: { code: "rate_limiter_unavailable", message: "Rate limiter is unavailable" } });\n    if (!rate.allowed) return json(request, env, 429, { error: { code: "rate_limited", message: "Rate limit exceeded" } });
     try {
       if (request.method === "GET" && (url.pathname === "/v1/models" || url.pathname === "/api/models")) return models(request, env);
       if (request.method === "POST" && (url.pathname === "/v1/chat/completions" || url.pathname === "/api/chat")) return await chat(request, env);

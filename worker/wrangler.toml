@@ -6,3 +6,13 @@ workers_dev = true
 [vars]
 YASIN_MAX_BODY_BYTES = "1048576"
 YASIN_RATE_LIMIT_PER_MINUTE = "60"
+
+# Optional Cloudflare-native rate limiting binding.
+# Set a unique positive namespace_id for your account before production deployment.
+[[ratelimits]]
+name = "YASIN_RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
