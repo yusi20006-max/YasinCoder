@@ -7,6 +7,7 @@ from github_ci import GitHubActions
 from github_git import GitPublisher
 from github_mode import GitHubClient, GitHubPermissionError
 from github_pr import GitHubPullRequests
+from core.diagnostics import from_exception
 from github_workspace import GitHubWorkspace
 
 
@@ -79,7 +80,7 @@ class GitHubWorkflow:
         try:
             remote_info = self.publisher.preflight()
         except Exception as exc:
-            remote_info = {"error": str(exc)}
+            remote_info = {"error": from_exception(exc, category="github").message}
 
         if not has_token:
             status = "NOT TESTED"
