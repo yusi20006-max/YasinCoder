@@ -92,3 +92,27 @@ jobs:
           grep -Fq 'YASIN_UPSTREAM_URL' worker/src/index.js
           grep -Fq 'YASIN_MAX_BODY_BYTES' worker/src/index.js
           grep -Fq 'YASIN_RATE_LIMIT_PER_MINUTE' worker/src/index.js
+
+  platform:
+    name: ${{ matrix.os }} platform integration
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout clean clone
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build and install package
+        run: python -m pip install --upgrade pip && python -m pip install --no-deps .
+      - name: Compile Python sources
+        run: python -m compileall -q .
+      - name: Platform integration tests
+        run: python -m unittest tests.test_platform_integration tests.test_tui -v
+      - name: CLI smoke test
+        run: python -m main info
