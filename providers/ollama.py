@@ -14,7 +14,11 @@ class OllamaAdapter(ProviderAdapter):
         if self.api_key: headers["Authorization"] = "Bearer " + self.api_key
         request = urllib.request.Request(self.base_url + path, data=json.dumps(payload).encode() if payload is not None else None, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response: return json.loads(response.read().decode("utf-8"))
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                if not isinstance(data, dict):
+                    raise ProviderRequestError("Ollama returned a non-object JSON response")
+                return data
         except urllib.error.HTTPError as exc:
             if exc.code in (401, 403): raise ProviderAuthenticationError("Ollama authentication failed", status=exc.code) from None
             raise ProviderRequestError(f"Ollama returned HTTP {exc.code}", status=exc.code) from None

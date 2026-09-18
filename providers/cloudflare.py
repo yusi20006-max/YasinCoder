@@ -37,8 +37,12 @@ class CloudflareProvider(ProviderAdapter):
         finally: getattr(response,"close",lambda:None)()
     def chat(self,prompt: str)->str:
         response=self._open(prompt,False)
-        try: data=json.loads(response.read().decode("utf-8"))
-        except (json.JSONDecodeError,UnicodeDecodeError): raise ProviderRequestError("Cloudflare returned invalid JSON") from None
+        try:
+            data = json.loads(response.read().decode("utf-8"))
+            if not isinstance(data, dict):
+                raise ProviderRequestError("Cloudflare returned a non-object JSON response")
+        except (json.JSONDecodeError,UnicodeDecodeError):
+            raise ProviderRequestError("Cloudflare returned invalid JSON") from None
         finally: getattr(response,"close",lambda:None)()
         result=data.get("result") or {}
         if "response" in result: return str(result["response"])
