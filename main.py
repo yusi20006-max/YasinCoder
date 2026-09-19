@@ -1,5 +1,7 @@
 import sys
 
+from core.version import VERSION
+
 from core.banner import show
 from commands.help import HelpCommand
 from commands.info import InfoCommand
@@ -36,10 +38,15 @@ def _testgen_args(args):
     return action, changed_only, base_ref, timeout
 
 
+def _show_default_summary():
+    print(f"YasinCoder {VERSION} — ready")
+    print("Run 'yasincoder help' for commands.")
+
+
 def main():
     show()
     if len(sys.argv) == 1:
-        print(HelpCommand().run())
+        _show_default_summary()
         return
 
     cmd = sys.argv[1]
