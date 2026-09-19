@@ -88,7 +88,7 @@ The same configuration contract supports `openai_compatible`, `openai`, `custom`
 
 ## CLI
 
-Common commands:
+Running `yasincoder` without a subcommand prints a concise version/readiness summary and performs no model inference, provider request, or interactive UI startup.\n\nCommon commands:
 
 ```text
 help                    Show commands
