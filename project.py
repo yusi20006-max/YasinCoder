@@ -31,9 +31,16 @@ def find_file(name):
 
 def read_file(name):
 
-    path=find_file(name)
+    if name:
+        expanded = os.path.expanduser(name)
+        if os.path.isabs(expanded) and os.path.exists(expanded):
+            path = expanded
+        else:
+            path = find_file(name)
+    else:
+        path = None
 
-    if path is None:
+    if path is None or not os.path.exists(path):
 
         return None
 
