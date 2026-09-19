@@ -113,6 +113,13 @@ class ModelManagerTests(unittest.TestCase):
                 found = manager.discover()
             self.assertEqual([(item["type"], item["model"]) for item in found], [("ollama", "qwen")])
 
+    def test_read_file_absolute_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "smoke.py"
+            p.write_text("print('hello')")
+            from project import read_file
+            self.assertEqual(read_file(str(p)), "print('hello')")
+
 
 if __name__ == "__main__":
     unittest.main()
