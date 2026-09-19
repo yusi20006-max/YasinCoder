@@ -88,6 +88,14 @@ The same configuration contract supports `openai_compatible`, `openai`, `custom`
 
 ## CLI
 
+Bare invocation:
+
+```bash
+yasincoder
+```
+
+The bare command prints a concise readiness summary and does not start the TUI, call a provider, or run model inference. Use an explicit subcommand for those actions.
+
 Common commands:
 
 ```text
