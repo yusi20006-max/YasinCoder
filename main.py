@@ -37,13 +37,21 @@ def _testgen_args(args):
 
 
 def main():
+    from core.version import VERSION
+
     if len(sys.argv) == 1:
-        from core.version import VERSION
         print(f"YasinCoder {VERSION} · ready")
         return
 
-    show()
     cmd = sys.argv[1]
+    if cmd == "--version":
+        print(f"YasinCoder {VERSION}")
+        return
+    if cmd in {"--help", "-h"}:
+        print(HelpCommand().run())
+        return
+
+    show()
     if cmd == "help":
         print(HelpCommand().run())
     elif cmd == "info":
