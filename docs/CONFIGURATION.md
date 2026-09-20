@@ -59,6 +59,29 @@ Example:
 | `CF_API_TOKEN` | Cloudflare credential, referenced as `api_token_env` |
 | `CF_MODEL` | Cloudflare model |
 
+## Local llama.cpp
+
+A local llama.cpp server exposes the OpenAI-compatible API used by YasinCoder. For example, start the server on localhost:
+
+```bash
+llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 18080 -c 4096
+```
+
+Then point YasinCoder at the server without putting credentials or model weights in the repository:
+
+```bash
+export YASIN_BASE_URL="http://127.0.0.1:18080"
+export YASIN_MODEL_NAME="/path/to/model.gguf"
+export YASIN_TIMEOUT=30
+export YASIN_MAX_TOKENS=512
+
+yasincoder doctor
+yasincoder models
+yasincoder chat "Hello from local llama.cpp"
+```
+
+The advertised model name should match the model identifier returned by the server's `/v1/models` endpoint. Native Termux/Android local-runtime acceptance should be verified on the target device; repository CI does not run llama.cpp model inference.
+
 ## Secrets
 
 Never put API keys or tokens in `models.json`. Use environment references such as `api_key_env`, `api_token_env`, or `account_id_env`, or a file reference such as `api_key_file_env` for credentials created by the Gemini setup flow. Runtime code resolves the value only when creating the provider adapter.
