@@ -140,6 +140,27 @@ class TuiUnitTests(unittest.TestCase):
             session = tui.PromptSession(lambda: next(keys), lambda _: None, completion_root=root)
             self.assertEqual(session.run(), ("task", "@main.py"))
 
+    def test_plan_mode_uses_plan_without_execution_when_declined(self):
+        app = tui.YasinCoderTUI(key_reader=lambda: "n")
+        with patch("commands.autonomous.AutonomousCommand.plan", return_value='{"steps": []}') as plan, patch.object(app, "task") as task, patch.object(app, "_pause"):
+            app.plan_task("inspect project")
+        plan.assert_called_once_with("inspect project")
+        task.assert_not_called()
+
+    def test_plan_mode_executes_only_after_approval(self):
+        keys = iter(["y"])
+        app = tui.YasinCoderTUI(key_reader=lambda: next(keys))
+        with patch("commands.autonomous.AutonomousCommand.plan", return_value='{"steps": []}'), patch.object(app, "task") as task, patch.object(app, "_pause"):
+            app.plan_task("fix tests")
+        task.assert_called_once_with("fix tests")
+
+    def test_slash_plan_does_not_directly_execute(self):
+        app = tui.YasinCoderTUI(key_reader=lambda: "n")
+        with patch.object(app, "plan_task") as plan, patch.object(app, "task") as task:
+            app.slash_task("plan", "fix tests")
+        plan.assert_called_once_with("fix tests")
+        task.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
