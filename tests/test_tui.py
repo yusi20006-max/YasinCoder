@@ -38,7 +38,7 @@ class TuiUnitTests(unittest.TestCase):
     def test_prompt_empty_enter_selects_action(self):
         keys = iter(["down", "enter"])
         session = tui.PromptSession(lambda: next(keys), lambda _: None)
-        self.assertEqual(session.run(), ("action", "project"))
+        self.assertEqual(session.run(), ("action", "plan"))
 
     def test_prompt_types_text_and_submits(self):
         keys = iter(list("fix tests") + ["enter"])
