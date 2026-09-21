@@ -162,7 +162,7 @@ class PromptSession:
 
     def _render(self, text: str, cursor: int, selected: int | None) -> None:
         self.output("")
-        self.output("❯ " + text)
+        self.output(("❯" if _supports_unicode() else ">") + " " + text)
         if selected is not None and self.actions:
             self.output("")
             self.output("Quick actions:")
@@ -449,7 +449,7 @@ class YasinCoderTUI:
             _clear(self.ansi)
             self.header("Commands")
             for index, action in enumerate(actions):
-                marker = "❯" if index == selected else " "
+                marker = ("❯" if _supports_unicode() else ">") if index == selected else " "
                 print(f" {marker} {action.label}")
             self.footer()
             key = self.key_reader()
