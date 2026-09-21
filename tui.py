@@ -17,7 +17,6 @@ from typing import Callable, Sequence
 from core.diagnostics import from_exception
 from core.file_mentions import complete as complete_mentions, context_preview, enrich_prompt, mentions
 from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
-from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
 from git_manager import GitManager
 from models.manager import ModelManager
 from project import project_info
@@ -171,6 +170,8 @@ class PromptSession:
         self.completion_root = completion_root
 
     def _render(self, text: str, cursor: int, selected: int | None) -> None:
+        if _supports_ansi():
+            self.output("\x1b[2J\x1b[H")
         self.output("")
         self.output(("❯" if _supports_unicode() else ">") + " " + text)
         slash_matches = complete_slash(text.strip()) if text.strip().startswith("/") else []
@@ -311,7 +312,7 @@ class YasinCoderTUI:
 
     def footer(self) -> None:
         print(_paint(_line(self.width), DIM, self.ansi))
-        print(_paint((("↑↓" if _supports_unicode() else "Up/Down") + " Navigate  Enter Select  Esc Back  Ctrl+P Commands  Ctrl+C Exit"), DIM, self.ansi))
+        print(_paint(((("↑↓" if _supports_unicode() else "Up/Down") + " Navigate  Enter Select  Esc Back  Ctrl+P Commands  Ctrl+C Exit")), DIM, self.ansi))
 
     def dashboard(self) -> None:
         self.header("Dashboard")

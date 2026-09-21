@@ -35,6 +35,13 @@ class TuiUnitTests(unittest.TestCase):
         with patch.dict(os.environ, {"NO_COLOR": "1"}):
             self.assertFalse(tui._supports_ansi())
 
+    def test_prompt_render_clears_screen_on_ansi_terminal(self):
+        output = []
+        session = tui.PromptSession(lambda: "esc", output.append)
+        with patch("tui._supports_ansi", return_value=True):
+            session._render("", 0, 0)
+        self.assertEqual(output[0], "\\x1b[2J\\x1b[H")
+
     def test_prompt_empty_enter_selects_action(self):
         keys = iter(["down", "enter"])
         session = tui.PromptSession(lambda: next(keys), lambda _: None)
