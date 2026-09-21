@@ -65,7 +65,7 @@ def main():
         from tui import run as tui_run
         raise SystemExit(tui_run())
     elif cmd == "setup":
-        provider = sys.argv[2] if len(sys.argv) > 2 else "gemini"
+        provider = sys.argv[2] if len(sys.argv) > 2 else None
         SetupCommand().run(provider)
     elif cmd == "project":
         print(ProjectCommand().run())
