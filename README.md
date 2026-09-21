@@ -95,7 +95,7 @@ help                    Show commands
 info                    Show runtime/package information
 doctor                  Validate environment and model registry
 tui                     Launch the interactive Terminal UI
-setup gemini            Configure Gemini API key and set Gemini as the default AI
+setup                   Open provider setup and configure the selected online provider
 models                  List configured models without printing credentials
 project                 Inspect the current project
 search <keyword>        Search project files
