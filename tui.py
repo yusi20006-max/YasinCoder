@@ -167,10 +167,10 @@ class PromptSession:
             self.output("")
             self.output("Quick actions:")
             for index, action in enumerate(self.actions[:5]):
-                marker = "❯" if index == selected else " "
+                marker = ("❯" if _supports_unicode() else ">") if index == selected else " "
                 self.output(f" {marker} {action.label}")
         self.output("")
-        self.output("↑↓ Actions/history   Enter Send   Esc Cancel   Ctrl+P Commands   Ctrl+C Exit")
+        self.output(("↑↓" if _supports_unicode() else "Up/Down") + " Actions/history   Enter Send   Esc Cancel   Ctrl+P Commands   Ctrl+C Exit")
 
     def run(self) -> tuple[str, str | None]:
         chars: list[str] = []
@@ -271,7 +271,7 @@ class YasinCoderTUI:
 
     def footer(self) -> None:
         print(_paint(_line(self.width), DIM, self.ansi))
-        print(_paint("↑↓ Navigate  Enter Select  Esc Back  Ctrl+P Commands  Ctrl+C Exit", DIM, self.ansi))
+        print(_paint((("↑↓" if _supports_unicode() else "Up/Down") + " Navigate  Enter Select  Esc Back  Ctrl+P Commands  Ctrl+C Exit"), DIM, self.ansi))
 
     def dashboard(self) -> None:
         self.header("Dashboard")
@@ -314,7 +314,7 @@ class YasinCoderTUI:
             if result != "task" or not value:
                 return
             task = value
-        print(_paint("Planning…", CYAN, self.ansi))
+        print(_paint("Planning...", CYAN, self.ansi))
         started = time.monotonic()
         try:
             from commands.autonomous import AutonomousCommand
