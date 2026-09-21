@@ -28,7 +28,7 @@ class ProviderSetupTests(unittest.TestCase):
 
     def test_setup_command_keeps_direct_gemini_compatibility(self):
         from commands.setup import SetupCommand
-        with patch("commands.setup.interactive_setup", return_value={"name": "gemini"}) as setup:
+        with patch("commands.setup.interactive_gemini_setup", return_value={"name": "gemini"}) as setup:
             result = SetupCommand().run("gemini")
         setup.assert_called_once()
         self.assertEqual(result["name"], "gemini")
