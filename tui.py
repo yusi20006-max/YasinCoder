@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from core.diagnostics import from_exception
+from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
 from git_manager import GitManager
 from models.manager import ModelManager
 from project import project_info
@@ -93,6 +94,8 @@ def _read_key() -> str:
             return "ctrl_d"
         if first == "\x10":
             return "ctrl_p"
+        if first == "\t":
+            return "tab"
         return first
 
     import termios
@@ -124,6 +127,8 @@ def _read_key() -> str:
             return "ctrl_d"
         if first == "\x10":
             return "ctrl_p"
+        if first == "\t":
+            return "tab"
         return first
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, previous)
@@ -163,6 +168,12 @@ class PromptSession:
     def _render(self, text: str, cursor: int, selected: int | None) -> None:
         self.output("")
         self.output(("❯" if _supports_unicode() else ">") + " " + text)
+        slash_matches = complete_slash(text.strip()) if text.strip().startswith("/") else []
+        if slash_matches:
+            self.output("")
+            self.output("Commands:")
+            for command in slash_matches[:5]:
+                self.output(f"  {command.name:<10} {command.description}")
         if selected is not None and self.actions:
             self.output("")
             self.output("Quick actions:")
@@ -236,6 +247,14 @@ class PromptSession:
             if key == "right":
                 cursor = min(len(chars), cursor + 1)
                 selected = None
+                continue
+            if key == "tab" and text.strip().startswith("/"):
+                matches = complete_slash(text.strip())
+                if matches:
+                    completed = matches[0].name
+                    chars = list(completed)
+                    cursor = len(chars)
+                    selected = None
                 continue
             if key == "backspace":
                 if cursor > 0:
@@ -442,6 +461,40 @@ class YasinCoderTUI:
         print("The prompt-first workflow uses only standard-library terminal input.")
         self._pause()
 
+    def slash_help(self) -> None:
+        self.header("Slash Commands")
+        for command in SLASH_COMMANDS:
+            print(f"  {command.name:<10} {command.description}")
+        print("\nTab completes a command; Enter submits it.")
+        self._pause()
+
+    def slash_task(self, command_name: str, argument: str) -> None:
+        if command_name == "help":
+            self.slash_help()
+        elif command_name == "clear":
+            return
+        elif command_name == "quit":
+            self.running = False
+        elif command_name == "models":
+            self.models()
+        elif command_name == "tests":
+            self.tests()
+        elif command_name == "review":
+            if argument:
+                self.task(f"Review {argument}")
+            else:
+                self.header("Review"); print("Usage: /review <file>"); self._pause()
+        elif command_name == "fix":
+            if argument:
+                self.task(f"Fix {argument}")
+            else:
+                self.header("Fix"); print("Usage: /fix <file>"); self._pause()
+        elif command_name == "plan":
+            if argument:
+                self.task(f"Plan {argument}")
+            else:
+                self.header("Plan"); print("Usage: /plan <task>"); self._pause()
+
     def command_palette(self) -> str | None:
         selected = 0
         actions = PROMPT_ACTIONS + (PromptAction("dashboard", "Dashboard"), PromptAction("quit", "Quit"))
@@ -499,7 +552,11 @@ class YasinCoderTUI:
                 if action == "cancel":
                     continue
                 if action == "task" and value:
-                    self.task(value)
+                    command, argument = parse_slash(value)
+                    if command is not None:
+                        self.slash_task(command.action, argument)
+                    else:
+                        self.task(value)
                 elif action == "palette":
                     command = self.command_palette()
                     if command:

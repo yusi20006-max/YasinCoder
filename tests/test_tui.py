@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import tui
+from core.slash_commands import complete, parse
 
 
 class TuiUnitTests(unittest.TestCase):
@@ -74,6 +75,26 @@ class TuiUnitTests(unittest.TestCase):
         app = tui.YasinCoderTUI(key_reader=lambda: "enter")
         with patch("commands.autonomous.AutonomousCommand.run", side_effect=RuntimeError("boom")), patch.object(app, "_pause"):
             app.task("bad task")
+
+    def test_slash_completion(self):
+        self.assertEqual([c.name for c in complete("/mo")], ["/model"])
+        self.assertEqual([c.name for c in complete("/r")], ["/review"])
+
+    def test_slash_parse_preserves_arguments(self):
+        command, argument = parse("/review src/main.py")
+        self.assertIsNotNone(command)
+        self.assertEqual(command.action, "review")
+        self.assertEqual(argument, "src/main.py")
+
+    def test_slash_unknown_is_not_command(self):
+        command, argument = parse("/unknown thing")
+        self.assertIsNone(command)
+        self.assertEqual(argument, "/unknown thing")
+
+    def test_prompt_tab_completes_slash_command(self):
+        keys = iter(list("/mo") + ["tab", "enter"])
+        session = tui.PromptSession(lambda: next(keys), lambda _: None)
+        self.assertEqual(session.run(), ("task", "/model"))
 
 
 if __name__ == "__main__":
