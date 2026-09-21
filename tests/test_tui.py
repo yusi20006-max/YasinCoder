@@ -40,7 +40,7 @@ class TuiUnitTests(unittest.TestCase):
         session = tui.PromptSession(lambda: "esc", output.append)
         with patch("tui._supports_ansi", return_value=True):
             session._render("", 0, 0)
-        self.assertEqual(output[0], "\\x1b[2J\\x1b[H")
+        self.assertEqual(output[0], "\x1b[2J\x1b[H")
 
     def test_prompt_empty_enter_selects_action(self):
         keys = iter(["down", "enter"])
