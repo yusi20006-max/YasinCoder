@@ -1,8 +1,7 @@
-"""Responsive, dependency-free Terminal UI for YasinCoder.
+"""Responsive, dependency-free prompt-first Terminal UI for YasinCoder.
 
 The UI deliberately uses the standard library so it remains usable on native
-Termux installations without pulling a large rendering stack. It reads the
-same project, Git, model and command interfaces as the existing CLI.
+Termux installations without pulling a large rendering stack.
 """
 from __future__ import annotations
 
@@ -12,7 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
 from core.diagnostics import from_exception
 from git_manager import GitManager
@@ -27,7 +26,6 @@ CYAN = "\x1b[36m"
 GREEN = "\x1b[32m"
 YELLOW = "\x1b[33m"
 RED = "\x1b[31m"
-BLUE = "\x1b[34m"
 
 
 def _supports_ansi() -> bool:
@@ -68,28 +66,211 @@ def _clear(enabled: bool) -> None:
         print("\n" * 2, end="")
 
 
-class YasinCoderTUI:
-    """Small state-driven terminal dashboard with a plain fallback."""
+def _read_key() -> str:
+    """Read one key and restore terminal mode even when an error occurs."""
+    if os.name == "nt":
+        import msvcrt
 
-    def __init__(self) -> None:
+        first = msvcrt.getwch()
+        if first in ("\x00", "\xe0"):
+            second = msvcrt.getwch()
+            return {
+                "H": "up",
+                "P": "down",
+                "K": "left",
+                "M": "right",
+            }.get(second, "")
+        if first == "\r":
+            return "enter"
+        if first == "\x1b":
+            return "esc"
+        if first == "\x08":
+            return "backspace"
+        if first == "\x03":
+            return "ctrl_c"
+        if first == "\x04":
+            return "ctrl_d"
+        if first == "\x10":
+            return "ctrl_p"
+        return first
+
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    previous = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        first = sys.stdin.read(1)
+        if first == "\x1b":
+            second = sys.stdin.read(1)
+            if second == "[":
+                third = sys.stdin.read(1)
+                return {
+                    "A": "up",
+                    "B": "down",
+                    "C": "right",
+                    "D": "left",
+                }.get(third, "esc")
+            return "esc"
+        if first in ("\r", "\n"):
+            return "enter"
+        if first in ("\x7f", "\x08"):
+            return "backspace"
+        if first == "\x03":
+            return "ctrl_c"
+        if first == "\x04":
+            return "ctrl_d"
+        if first == "\x10":
+            return "ctrl_p"
+        return first
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, previous)
+
+
+@dataclass(frozen=True)
+class PromptAction:
+    key: str
+    label: str
+
+
+PROMPT_ACTIONS: tuple[PromptAction, ...] = (
+    PromptAction("task", "Start a coding task"),
+    PromptAction("project", "Inspect project"),
+    PromptAction("models", "Choose provider/model"),
+    PromptAction("git", "Inspect Git changes"),
+    PromptAction("tests", "Run tests"),
+    PromptAction("system", "System status"),
+    PromptAction("sessions", "Sessions"),
+    PromptAction("settings", "Settings"),
+)
+
+
+class PromptSession:
+    """Testable prompt editor with keyboard navigation and command palette."""
+
+    def __init__(
+        self,
+        key_reader: Callable[[], str],
+        output: Callable[[str], None],
+        actions: Sequence[PromptAction] = PROMPT_ACTIONS,
+    ) -> None:
+        self.key_reader = key_reader
+        self.output = output
+        self.actions = tuple(actions)
+
+    def _render(self, text: str, cursor: int, selected: int | None) -> None:
+        self.output("")
+        self.output("❯ " + text)
+        if selected is not None and self.actions:
+            self.output("")
+            self.output("Quick actions:")
+            for index, action in enumerate(self.actions[:5]):
+                marker = "❯" if index == selected else " "
+                self.output(f" {marker} {action.label}")
+        self.output("")
+        self.output("↑↓ Actions/history   Enter Send   Esc Cancel   Ctrl+P Commands   Ctrl+C Exit")
+
+    def run(self) -> tuple[str, str | None]:
+        chars: list[str] = []
+        cursor = 0
+        selected: int | None = 0 if self.actions else None
+        history: list[str] = []
+        history_index: int | None = None
+
+        while True:
+            text = "".join(chars)
+            self._render(text, cursor, selected)
+            key = self.key_reader()
+
+            if key == "enter":
+                if text.strip():
+                    history.append(text)
+                    return "task", text.strip()
+                if selected is not None and self.actions:
+                    return "action", self.actions[selected].key
+                continue
+            if key == "esc":
+                return "cancel", None
+            if key in {"ctrl_c", "ctrl_d"}:
+                return "quit", None
+            if key == "ctrl_p":
+                return "palette", None
+            if key == "up":
+                if text or history:
+                    if history:
+                        if history_index is None:
+                            history_index = len(history) - 1
+                        else:
+                            history_index = max(0, history_index - 1)
+                        chars = list(history[history_index])
+                        cursor = len(chars)
+                        selected = None
+                elif self.actions:
+                    selected = (selected - 1) % len(self.actions) if selected is not None else 0
+                continue
+            if key == "down":
+                if text or history:
+                    if history:
+                        if history_index is None:
+                            history_index = 0
+                        elif history_index < len(history) - 1:
+                            history_index += 1
+                        else:
+                            history_index = None
+                            chars = []
+                            cursor = 0
+                            selected = 0 if self.actions else None
+                            continue
+                        chars = list(history[history_index])
+                        cursor = len(chars)
+                        selected = None
+                elif self.actions:
+                    selected = (selected + 1) % len(self.actions) if selected is not None else 0
+                continue
+            if key == "left":
+                cursor = max(0, cursor - 1)
+                selected = None
+                continue
+            if key == "right":
+                cursor = min(len(chars), cursor + 1)
+                selected = None
+                continue
+            if key == "backspace":
+                if cursor > 0:
+                    del chars[cursor - 1]
+                    cursor -= 1
+                selected = None
+                continue
+            if isinstance(key, str) and len(key) == 1 and key.isprintable():
+                chars.insert(cursor, key)
+                cursor += 1
+                selected = None
+                history_index = None
+
+
+class YasinCoderTUI:
+    """Prompt-first terminal UI with a plain/non-TTY fallback."""
+
+    def __init__(self, key_reader: Callable[[], str] | None = None) -> None:
         self.ansi = _supports_ansi()
         self.width, self.height = _terminal_size()
         self.project = Path.cwd()
         self.mode = "simple"
         self.running = True
+        self.key_reader = key_reader or _read_key
 
     def refresh_size(self) -> None:
         self.width, self.height = _terminal_size()
 
     def header(self, title: str) -> None:
         self.refresh_size()
-        line = _line(self.width)
         print(_paint(" YASIN CODER ", BOLD + CYAN, self.ansi) + _paint(f"  {title}", BOLD, self.ansi))
-        print(_paint(line, DIM, self.ansi))
+        print(_paint(_line(self.width), DIM, self.ansi))
 
     def footer(self) -> None:
         print(_paint(_line(self.width), DIM, self.ansi))
-        print(_paint("[1] Dashboard  [2] Task  [3] Projects  [4] Sessions  [5] Models  [6] Git  [7] Tests  [8] System  [9] Settings  [q] Quit", DIM, self.ansi))
+        print(_paint("↑↓ Navigate  Enter Select  Esc Back  Ctrl+P Commands  Ctrl+C Exit", DIM, self.ansi))
 
     def dashboard(self) -> None:
         self.header("Dashboard")
@@ -101,7 +282,8 @@ class YasinCoderTUI:
             version = metadata.version("yasincoder")
         except Exception as exc:
             print(_paint(from_exception(exc).message, RED, self.ansi))
-            self.footer(); return
+            self.footer()
+            return
         provider = str(model.get("type", "none")) if model else "none"
         model_name = str(model.get("model") or model.get("name") or "none") if model else "none"
         status = _paint("READY", GREEN, self.ansi)
@@ -110,29 +292,27 @@ class YasinCoderTUI:
         elif git.get("dirty"):
             status = _paint("READY · changes", YELLOW, self.ansi)
         rows = [
-            ("Version", version), ("Project", str(info["project"])),
+            ("Version", version),
+            ("Project", str(info["project"])),
             ("Branch", git.get("branch") or "not a Git repository"),
-            ("Provider", provider), ("Model", model_name),
-            ("Status", status), ("Python", sys.version.split()[0]),
+            ("Provider", provider),
+            ("Model", model_name),
+            ("Status", status),
+            ("Python", sys.version.split()[0]),
             ("Files", info["count"]),
         ]
         for key, value in rows:
             print(f"  {_paint(key + ':', BOLD, self.ansi):<18} {_clip(str(value), self.width - 22)}")
-        print()
-        print(_paint("What would you like to do?", BOLD, self.ansi))
-        print("  1  Start a coding task")
-        print("  2  Inspect project and changes")
-        print("  3  Choose provider/model")
-        print("  4  Run tests")
-        print("  5  System status")
         self.footer()
 
-    def task(self) -> None:
+    def task(self, prompt: str | None = None) -> None:
         self.header("New Task")
-        print("Describe the coding task. Leave empty to cancel.")
-        task = input("> ").strip()
-        if not task:
-            return
+        task = prompt
+        if task is None:
+            result, value = PromptSession(self.key_reader, print).run()
+            if result != "task" or not value:
+                return
+            task = value
         print(_paint("Planning…", CYAN, self.ansi))
         started = time.monotonic()
         try:
@@ -143,7 +323,7 @@ class YasinCoderTUI:
             print(_clip(result, self.width))
         except Exception as exc:
             print(_paint(f"Task failed: {from_exception(exc).message}", RED, self.ansi))
-        input("Press Enter to continue…")
+        self._pause()
 
     def projects(self) -> None:
         self.header("Projects")
@@ -156,19 +336,19 @@ class YasinCoderTUI:
                 print("  " + _clip(str(path), self.width - 4))
         except Exception as exc:
             print(_paint(from_exception(exc).message, RED, self.ansi))
-        self.footer()
+        self._pause()
 
     def sessions(self) -> None:
         self.header("Sessions")
         state_root = Path(os.getenv("YASIN_CONFIG_DIR", Path.home() / ".config" / "yasin-coder"))
         candidates = list(state_root.glob("**/*session*")) if state_root.exists() else []
         if candidates:
-            for path in candidates[: self.height - 7]:
+            for path in candidates[: max(1, self.height - 7)]:
                 print(f"  {path}")
         else:
             print(_paint("No persistent session records are exposed by the current core.", DIM, self.ansi))
             print("The TUI does not invent session state.")
-        self.footer()
+        self._pause()
 
     def models(self) -> None:
         self.header("Providers & Models")
@@ -177,54 +357,64 @@ class YasinCoderTUI:
             models = manager.list()
             default = manager.default()
             if not models:
-                print("No configured models. Use: yasincoder setup gemini")
+                print("No configured models. Use: yasincoder setup")
             for item in models:
-                active = default and item.get("name") == default.get("name")
+                active = bool(default and item.get("name") == default.get("name"))
                 marker = "●" if active and _supports_unicode() else ("*" if active else "-")
                 state = "active" if active else "configured"
                 print(f" {marker} {_clip(str(item.get('name')), self.width - 30)}  {item.get('type', '')}  {state}")
         except Exception as exc:
             print(_paint(f"Model registry error: {from_exception(exc).message}", RED, self.ansi))
-        self.footer()
+        self._pause()
 
     def git(self) -> None:
         self.header("Git / Changes")
         manager = GitManager(self.project)
         if not manager.is_repository():
             print("Current project is not a Git repository.")
-            self.footer(); return
+            self._pause()
+            return
         summary = manager.change_summary()
         print(f"Branch: {summary['branch']}")
         print(f"State: {'dirty' if summary['dirty'] else 'clean'}")
         if summary["conflicts"]:
             print(_paint("Conflicts detected. No destructive action is offered by the TUI.", RED, self.ansi))
         print(f"Changed files: {summary['changed']}")
-        for entry in summary["entries"][: self.height - 11]:
+        for entry in summary["entries"][: max(1, self.height - 11)]:
             print("  " + _clip(entry, self.width - 4))
         print("\nRecent commits:")
         for line in manager.log(5).splitlines():
             print("  " + _clip(line, self.width - 4))
-        self.footer()
+        self._pause()
 
     def tests(self) -> None:
         self.header("Tests")
         print("Running the repository test suite…")
         started = time.monotonic()
         try:
-            proc = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], text=True, capture_output=True, timeout=300)
+            proc = subprocess.run(
+                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"],
+                text=True,
+                capture_output=True,
+                timeout=300,
+            )
             elapsed = time.monotonic() - started
             state = _paint("PASS", GREEN, self.ansi) if proc.returncode == 0 else _paint("FAIL", RED, self.ansi)
             print(f"Result: {state} · {elapsed:.1f}s")
             output = (proc.stdout + proc.stderr).strip().splitlines()
-            for line in output[-min(self.height - 8, 12):]:
+            for line in output[-min(max(1, self.height - 8), 12):]:
                 print(_clip(line, self.width))
         except subprocess.TimeoutExpired:
             print(_paint("Test run timed out after 300s.", RED, self.ansi))
-        self.footer()
+        self._pause()
 
     def system(self) -> None:
         self.header("System Status")
-        checks: list[tuple[str, str]] = [("Python", sys.version.split()[0]), ("Platform", sys.platform), ("Terminal", f"{self.width}×{self.height}")]
+        checks: list[tuple[str, str]] = [
+            ("Python", sys.version.split()[0]),
+            ("Platform", sys.platform),
+            ("Terminal", f"{self.width}×{self.height}"),
+        ]
         try:
             import importlib.metadata as metadata
             checks.append(("YasinCoder", metadata.version("yasincoder")))
@@ -242,49 +432,108 @@ class YasinCoderTUI:
             checks.append(("Provider", f"error: {from_exception(exc).message}"))
         for key, value in checks:
             print(f"  {_paint(key + ':', BOLD, self.ansi):<18} {value}")
-        self.footer()
+        self._pause()
 
     def settings(self) -> None:
         self.header("Settings")
         print(f"UI mode: {self.mode}")
-        print("  m  toggle Simple / Advanced")
-        print("  r  refresh terminal dimensions")
-        print("  n  disable ANSI colors (NO_COLOR for next launch)")
-        print("\nSettings are intentionally limited here; provider secrets remain managed by the existing secure setup flow.")
-        self.footer()
+        print("Provider secrets remain managed by the secure setup flow.")
+        print("The prompt-first workflow uses only standard-library terminal input.")
+        self._pause()
+
+    def command_palette(self) -> str | None:
+        selected = 0
+        actions = PROMPT_ACTIONS + (PromptAction("dashboard", "Dashboard"), PromptAction("quit", "Quit"))
+        while True:
+            _clear(self.ansi)
+            self.header("Commands")
+            for index, action in enumerate(actions):
+                marker = "❯" if index == selected else " "
+                print(f" {marker} {action.label}")
+            self.footer()
+            key = self.key_reader()
+            if key == "up":
+                selected = (selected - 1) % len(actions)
+            elif key == "down":
+                selected = (selected + 1) % len(actions)
+            elif key == "enter":
+                return actions[selected].key
+            elif key in {"esc", "ctrl_c", "ctrl_d"}:
+                return None
+
+    def _pause(self) -> None:
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            self.key_reader()
+
+    def prompt(self) -> tuple[str, str | None]:
+        self.refresh_size()
+        self.header("Command")
+        try:
+            model = ModelManager().default()
+            model_name = str(model.get("model") or model.get("name") or "none") if model else "none"
+            provider = str(model.get("type") or "none") if model else "none"
+        except Exception:
+            provider, model_name = "unknown", "unknown"
+        print(f"Project: {_clip(str(self.project), self.width - 9)}")
+        print(f"Provider: {provider}   Model: {_clip(model_name, max(10, self.width - 25))}")
+        print(_line(self.width))
+        return PromptSession(self.key_reader, print).run()
 
     def plain(self) -> None:
-        """Non-interactive-friendly fallback for dumb or redirected terminals."""
+        """Non-interactive-friendly fallback for redirected or dumb terminals."""
         self.dashboard()
-        print("\nRich navigation is unavailable. Use the existing CLI commands directly.")
+        print("\nRich keyboard navigation is unavailable. Use the CLI commands directly.")
+        print("For the interactive workflow, run: yasincoder tui")
 
     def run(self) -> int:
         if not sys.stdin.isatty() or not sys.stdout.isatty():
             self.plain()
             return 0
-        screens: dict[str, Callable[[], None]] = {"1": self.dashboard, "2": self.task, "3": self.projects, "4": self.sessions, "5": self.models, "6": self.git, "7": self.tests, "8": self.system, "9": self.settings}
-        self.dashboard()
-        while self.running:
-            try:
-                choice = input("\nSelect [1-9/q]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if choice == "q":
-                break
-            if choice == "m":
-                self.mode = "advanced" if self.mode == "simple" else "simple"
-                self.dashboard()
-                continue
-            screen = screens.get(choice)
-            if screen:
+        try:
+            while self.running:
                 _clear(self.ansi)
-                screen()
-            else:
-                print("Choose 1-9 or q.")
-        if self.ansi:
-            print(RESET, end="")
+                action, value = self.prompt()
+                if action == "quit":
+                    break
+                if action == "cancel":
+                    continue
+                if action == "task" and value:
+                    self.task(value)
+                elif action == "palette":
+                    command = self.command_palette()
+                    if command:
+                        self._dispatch(command)
+                elif action == "action" and value:
+                    self._dispatch(value)
+        except (EOFError, KeyboardInterrupt):
+            print()
+        finally:
+            if self.ansi:
+                print(RESET, end="")
         return 0
+
+    def _dispatch(self, action: str) -> None:
+        if action == "quit":
+            self.running = False
+        elif action == "task":
+            self.task()
+        elif action == "project":
+            self.projects()
+        elif action == "sessions":
+            self.sessions()
+        elif action == "models":
+            self.models()
+        elif action == "git":
+            self.git()
+        elif action == "tests":
+            self.tests()
+        elif action == "system":
+            self.system()
+        elif action == "settings":
+            self.settings()
+        elif action == "dashboard":
+            _clear(self.ansi)
+            self.dashboard()
 
 
 def run() -> int:
