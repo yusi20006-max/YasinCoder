@@ -96,6 +96,50 @@ class TuiUnitTests(unittest.TestCase):
         session = tui.PromptSession(lambda: next(keys), lambda _: None)
         self.assertEqual(session.run(), ("task", "/model"))
 
+    def test_file_mention_resolves_inside_project(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from core.file_mentions import mentions
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("print('ok')", encoding="utf-8")
+            self.assertEqual(mentions("@main.py", root), [root / "main.py"])
+
+    def test_file_mention_rejects_traversal(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from core.file_mentions import resolve_mention
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            outside = Path(tmp) / "secret.txt"
+            outside.write_text("secret", encoding="utf-8")
+            self.assertIsNone(resolve_mention("../secret.txt", root))
+
+    def test_file_mention_completion(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from core.file_mentions import complete
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("x", encoding="utf-8")
+            (root / "models.py").write_text("x", encoding="utf-8")
+            self.assertEqual(complete("@ma", root), ["@main.py"])
+
+    def test_prompt_tab_completes_file_mention(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "main.py").write_text("x", encoding="utf-8")
+            keys = iter(list("@ma") + ["tab", "enter"])
+            session = tui.PromptSession(lambda: next(keys), lambda _: None, completion_root=root)
+            self.assertEqual(session.run(), ("task", "@main.py"))
+
 
 if __name__ == "__main__":
     unittest.main()

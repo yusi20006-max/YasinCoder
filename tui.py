@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from core.diagnostics import from_exception
+from core.file_mentions import complete as complete_mentions, context_preview, enrich_prompt, mentions
+from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
 from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
 from git_manager import GitManager
 from models.manager import ModelManager
@@ -160,20 +162,28 @@ class PromptSession:
         key_reader: Callable[[], str],
         output: Callable[[str], None],
         actions: Sequence[PromptAction] = PROMPT_ACTIONS,
+        completion_root: Path | None = None,
     ) -> None:
         self.key_reader = key_reader
         self.output = output
         self.actions = tuple(actions)
+        self.completion_root = completion_root
 
     def _render(self, text: str, cursor: int, selected: int | None) -> None:
         self.output("")
         self.output(("❯" if _supports_unicode() else ">") + " " + text)
         slash_matches = complete_slash(text.strip()) if text.strip().startswith("/") else []
+        mention_matches = complete_mentions(text.rsplit(" ", 1)[-1], self.completion_root) if self.completion_root and text.rsplit(" ", 1)[-1].startswith("@") else []
         if slash_matches:
             self.output("")
             self.output("Commands:")
             for command in slash_matches[:5]:
                 self.output(f"  {command.name:<10} {command.description}")
+        if mention_matches:
+            self.output("")
+            self.output("Files:")
+            for item in mention_matches[:5]:
+                self.output("  " + item)
         if selected is not None and self.actions:
             self.output("")
             self.output("Quick actions:")
@@ -248,13 +258,23 @@ class PromptSession:
                 cursor = min(len(chars), cursor + 1)
                 selected = None
                 continue
-            if key == "tab" and text.strip().startswith("/"):
-                matches = complete_slash(text.strip())
-                if matches:
-                    completed = matches[0].name
-                    chars = list(completed)
-                    cursor = len(chars)
-                    selected = None
+            if key == "tab":
+                token = text.rsplit(" ", 1)[-1]
+                if token.startswith("/"):
+                    matches = complete_slash(token)
+                    if matches:
+                        replacement = matches[0].name
+                        chars = list(text[: len(text) - len(token)] + replacement)
+                        cursor = len(chars)
+                        selected = None
+                    continue
+                if token.startswith("@") and self.completion_root:
+                    matches = complete_mentions(token, self.completion_root)
+                    if matches:
+                        replacement = matches[0]
+                        chars = list(text[: len(text) - len(token)] + replacement)
+                        cursor = len(chars)
+                        selected = None
                 continue
             if key == "backspace":
                 if cursor > 0:
@@ -329,15 +349,22 @@ class YasinCoderTUI:
         self.header("New Task")
         task = prompt
         if task is None:
-            result, value = PromptSession(self.key_reader, print).run()
+            result, value = PromptSession(self.key_reader, print, completion_root=self.project).run()
             if result != "task" or not value:
                 return
             task = value
+        referenced = mentions(task, self.project)
+        if referenced:
+            print(_paint("Context preview:", CYAN, self.ansi))
+            for item in context_preview(referenced, self.project):
+                print("  " + item)
+            print()
+        enriched_task, _ = enrich_prompt(task, self.project)
         print(_paint("Planning...", CYAN, self.ansi))
         started = time.monotonic()
         try:
             from commands.autonomous import AutonomousCommand
-            result = AutonomousCommand().run(task)
+            result = AutonomousCommand().run(enriched_task)
             elapsed = time.monotonic() - started
             print(_paint(f"Done · {elapsed:.1f}s", GREEN, self.ansi))
             print(_clip(result, self.width))
@@ -531,7 +558,7 @@ class YasinCoderTUI:
         print(f"Project: {_clip(str(self.project), self.width - 9)}")
         print(f"Provider: {provider}   Model: {_clip(model_name, max(10, self.width - 25))}")
         print(_line(self.width))
-        return PromptSession(self.key_reader, print).run()
+        return PromptSession(self.key_reader, print, completion_root=self.project).run()
 
     def plain(self) -> None:
         """Non-interactive-friendly fallback for redirected or dumb terminals."""
