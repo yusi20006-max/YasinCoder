@@ -17,7 +17,6 @@ from typing import Callable, Sequence
 from core.diagnostics import from_exception
 from core.file_mentions import complete as complete_mentions, context_preview, enrich_prompt, mentions
 from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
-from core.slash_commands import SLASH_COMMANDS, complete as complete_slash, parse as parse_slash
 from git_manager import GitManager
 from models.manager import ModelManager
 from project import project_info
@@ -143,8 +142,7 @@ class PromptAction:
 
 
 PROMPT_ACTIONS: tuple[PromptAction, ...] = (
-    PromptAction("task", "Act: start a coding task"),
-    PromptAction("plan", "Plan: preview a coding task"),
+    PromptAction("task", "Start a coding task"),
     PromptAction("project", "Inspect project"),
     PromptAction("models", "Choose provider/model"),
     PromptAction("git", "Inspect Git changes"),
@@ -496,25 +494,6 @@ class YasinCoderTUI:
         print("\nTab completes a command; Enter submits it.")
         self._pause()
 
-    def plan_task(self, prompt: str) -> None:
-        self.header("Plan Mode")
-        print("Plan mode is read-only. No project files will be changed.")
-        print()
-        try:
-            from commands.autonomous import AutonomousCommand
-            plan = AutonomousCommand().plan(prompt)
-            print(plan)
-            print()
-            print("Approve this plan and execute it? [y/N]")
-            key = self.key_reader()
-            if key.lower() == "y":
-                self.task(prompt)
-            else:
-                print("Plan cancelled; no changes were made.")
-        except Exception as exc:
-            print(_paint(f"Plan failed: {from_exception(exc).message}", RED, self.ansi))
-        self._pause()
-
     def slash_task(self, command_name: str, argument: str) -> None:
         if command_name == "help":
             self.slash_help()
@@ -538,14 +517,9 @@ class YasinCoderTUI:
                 self.header("Fix"); print("Usage: /fix <file>"); self._pause()
         elif command_name == "plan":
             if argument:
-                self.plan_task(argument)
+                self.task(f"Plan {argument}")
             else:
                 self.header("Plan"); print("Usage: /plan <task>"); self._pause()
-        elif command_name == "act":
-            if argument:
-                self.task(argument)
-            else:
-                self.header("Act"); print("Usage: /act <task>"); self._pause()
 
     def command_palette(self) -> str | None:
         selected = 0
@@ -566,11 +540,6 @@ class YasinCoderTUI:
                 return actions[selected].key
             elif key in {"esc", "ctrl_c", "ctrl_d"}:
                 return None
-
-    def _prompt_task_text(self, title: str) -> str | None:
-        self.header(title)
-        result, value = PromptSession(self.key_reader, print, completion_root=self.project).run()
-        return value if result == "task" and value else None
 
     def _pause(self) -> None:
         if sys.stdin.isatty() and sys.stdout.isatty():
@@ -632,10 +601,6 @@ class YasinCoderTUI:
             self.running = False
         elif action == "task":
             self.task()
-        elif action == "plan":
-            prompt = self._prompt_task_text("Plan task")
-            if prompt:
-                self.plan_task(prompt)
         elif action == "project":
             self.projects()
         elif action == "sessions":
