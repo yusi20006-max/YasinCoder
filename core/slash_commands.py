@@ -19,7 +19,8 @@ SLASH_COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand("/test", "Run the repository tests", "tests"),
     SlashCommand("/review", "Review a file (use /review <file>)", "review"),
     SlashCommand("/fix", "Fix a file (use /fix <file>)", "fix"),
-    SlashCommand("/plan", "Create a plan for a task (use /plan <task>)", "plan"),
+    SlashCommand("/plan", "Create and review a plan (use /plan <task>)", "plan"),
+    SlashCommand("/act", "Execute a coding task (use /act <task>)", "act"),
     SlashCommand("/clear", "Clear the current prompt", "clear"),
     SlashCommand("/quit", "Exit YasinCoder", "quit"),
 )
