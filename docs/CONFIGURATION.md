@@ -4,11 +4,13 @@ YasinCoder keeps provider configuration in a user-owned registry outside the rep
 
 ## First-run Gemini setup
 
-For the simplest online setup, run:
+For the provider-agnostic online setup, run:
 
 ```bash
-yasincoder setup gemini
+yasincoder setup
 ```
+
+The selector supports `↑`/`↓` and `Enter`. Gemini is currently the implemented online provider. Other displayed providers are marked unavailable until their setup adapters are implemented. For scripts or compatibility, `yasincoder setup gemini` continues to invoke the direct Gemini flow.
 
 The command prompts for a Gemini API key without echoing it, validates the key against Google's OpenAI-compatible model endpoint, discovers compatible Gemini models, selects a supported Flash model, and persists `gemini` as the default provider. The key is stored separately in a user-only credential file; it is never written to `models.json`, printed, logged, or committed.
 
@@ -94,7 +96,7 @@ Selection order is deterministic:
 2. The persisted `default` entry.
 3. The first model sorted by name.
 
-Run `yasincoder setup gemini` for the first-run Gemini flow, `yasincoder models` to inspect the registry without printing secret values, and `yasincoder doctor` to validate configuration.
+Run `yasincoder setup` for the interactive provider setup flow, or `yasincoder setup gemini` for the direct Gemini compatibility path, `yasincoder models` to inspect the registry without printing secret values, and `yasincoder doctor` to validate configuration.
 
 ## Discovery
 
