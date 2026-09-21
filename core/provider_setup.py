@@ -29,12 +29,12 @@ def _read_key() -> str:
         import msvcrt
 
         first = msvcrt.getwch()
-        if first in ("\\x00", "\\xe0"):
+        if first in ("\x00", "\xe0"):
             second = msvcrt.getwch()
             return {"H": "up", "P": "down"}.get(second, "")
-        if first in ("\\r", "\\n"):
+        if first in ("\r", "\n"):
             return "enter"
-        if first == "\\x1b":
+        if first == "\x1b":
             return "esc"
         return first
 
@@ -46,15 +46,15 @@ def _read_key() -> str:
     try:
         tty.setraw(fd)
         first = sys.stdin.read(1)
-        if first == "\\x1b":
+        if first == "\x1b":
             second = sys.stdin.read(1)
             if second == "[":
                 third = sys.stdin.read(1)
                 return {"A": "up", "B": "down"}.get(third, "esc")
             return "esc"
-        if first in ("\\r", "\\n"):
+        if first in ("\r", "\n"):
             return "enter"
-        if first == "\\x03":
+        if first == "\x03":
             raise KeyboardInterrupt
         return first
     finally:
@@ -67,7 +67,7 @@ def _interactive_available() -> bool:
 
 def _render(options: Sequence[ProviderOption], selected: int, output: Callable[[str], None]) -> None:
     if _interactive_available():
-        output("\\x1b[2J\\x1b[H")
+        output("\x1b[2J\x1b[H")
     output("YasinCoder AI setup")
     output("Select a provider with ↑/↓ and Enter. Esc cancels.")
     output("")
@@ -101,7 +101,7 @@ def select_provider(
                 output(f"{option.label} is not implemented yet.")
                 continue
             return option.key
-        elif key in ("esc", "q", "\\x03"):
+        elif key in ("esc", "q", "\x03"):
             return None
 
 
