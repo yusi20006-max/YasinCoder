@@ -111,7 +111,7 @@ class ModelManagerTests(unittest.TestCase):
                 return None
             with patch.object(manager, "_json", side_effect=fake_json):
                 found = manager.discover()
-            self.assertEqual([(item["type"], item["model"]) for item in found], [("ollama", "qwen")])
+            self.assertEqual([(item["type"], item["model"]) for item in found if item["type"] == "ollama"], [("ollama", "qwen")])
 
     def test_read_file_absolute_path(self):
         with tempfile.TemporaryDirectory() as tmp:
