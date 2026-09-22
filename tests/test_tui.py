@@ -40,7 +40,7 @@ class TuiUnitTests(unittest.TestCase):
         session = tui.PromptSession(lambda: "esc", output.append)
         with patch("tui._supports_ansi", return_value=True):
             session._render("", 0, 0)
-        self.assertEqual(output[0], "\x1b[2J\x1b[H")
+        self.assertEqual(output[0], "[2J[H")
 
     def test_prompt_empty_enter_selects_action(self):
         keys = iter(["down", "enter"])
@@ -111,7 +111,27 @@ class TuiUnitTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "main.py").write_text("print('ok')", encoding="utf-8")
-            self.assertEqual(mentions("@main.py", root), [root / "main.py"])
+            self.assertEqual(mentions("@main.py", root), [root.resolve() / "main.py"])
+
+    def test_file_mention_resolves_consistently_for_symlinked_project_root(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from core.file_mentions import mentions
+
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            real_root = base / "real-project"
+            link_root = base / "linked-project"
+            real_root.mkdir()
+            (real_root / "main.py").write_text("print('ok')", encoding="utf-8")
+            try:
+                link_root.symlink_to(real_root, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                self.skipTest("directory symlinks are unavailable on this platform")
+            self.assertEqual(
+                mentions("@main.py", link_root),
+                [real_root.resolve() / "main.py"],
+            )
 
     def test_file_mention_rejects_traversal(self):
         from pathlib import Path
